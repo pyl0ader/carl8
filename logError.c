@@ -1,4 +1,4 @@
-#include "error.h"
+#include "logError.h"
 
 char error[ERROR_BUFFER_SIZE] = {};
 

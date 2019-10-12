@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "error.h"
+#include "logError.h"
 #include "interpreter.h"
 
 static int loadRom(FILE *rom);
@@ -13,14 +13,6 @@ static uint16_t pc = 0x200;
 static uint16_t instruction;
 
 uint8_t screen[64 * 32] = {};
-
-struct Opcode{
-    uint16_t mask;
-    uint16_t code;
-    uint8_t parameterCount;
-    uint16_t parameter[3];
-    char name[5];
-};
 
 enum {
     NNN,
@@ -106,65 +98,13 @@ int getInstruction(uint16_t addr)
     return 0;
 }
 
-int param(uint16_t i, uint8_t p)
-{
-    /*
-    for(int j = 0; j < 35 && !(i & opcode[j].mask == opcode[j].code); j++);
-    assert(p < opcode[j].parameterCount);
-    */
-}
-
-
 #include <string.h>
 #define STRING_SIZE 80
 
 int disassemble()
 { 
-    /*
-    char assembly[STRING_SIZE];
-    char cat[STRING_SIZE];
-
-    if(!memory[0x200]){
-        printf("Nothing to dissassemble\n");
-        return 0;
-    }
-    
-    for(int addr = 0x200; !DISASSEMBLED(i) && addr < 0xfff && memory[i]; addr += 2){
-        snprintf(assembly, STRING_SIZE, "%3.3X:\t", addr);
-        instruction = ((uint16_t)memory[addr] << 8) | memory[addr+1];
-
-        for(int j = 0; j < 35; j++){
-            if( (instruction & opcodes[j].mask) == opcodes[j].code)
-            {
-                if(opcode[j].name == "JMP")
-                {
-                    addr = param(opcode[j], 1);
-                } 
-                else if(opcode[j].name == "CALL")
-                {
-                    disassemble( param(opcode[j], 1) );
-                }
-                else if(opcode[j].name == "RET")
-                {
-                    return;
-                } 
-                else if(opcode[j].name == "SE" || opcode[j].name == "SNE")
-                {
-                    disassemble(addr);
-                    addr += 2;
-                }
-
-                for(int p = 0; p < opcodes[j].parameterCount; p++)
-                {
-                    snprintf(cat, STRING_SIZE, ",\t%X", instruction & opcodes[j].parameterMasks[p]);
-                    strncat(assembly, cat, STRING_SIZE);
-                }
-
-                puts(assembly);
-            }
-        }
-    } 
-    */
+    //step one, differentiate logic from data
+    //step two, step through logic printing instructions
     return 0;
 } 
 

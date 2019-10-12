@@ -1,7 +1,7 @@
 #include "video.h"
 #include "input.h"
 #include "interpreter.h"
-#include "error.h"
+#include "logError.h"
 
 #define TITLE "chipper"
 
@@ -20,19 +20,17 @@ int main(int argc, char** argv)
     if(initializeInterpreter(*++argv) < 0){
         die("initializeInterpreter: %s", getError());
     }
-
-    disassemble();
-
+    
     if(initializeVideo(TITLE) < 0){
         die("InitializeVideo: %s", getError());
     }
 
-    initializeInput();
+    initializeInput(); //currently no error handling for input
 
     while(!action.quit){
         inputProcess();
         for(int i=0; i < 16; i++){
-            screen[i] = (action.hexKey & (0b1 << i)) > 0; 
+            screen[i] = (action.hexKey & (1 << i)) > 0; 
         }
         if(videoProcess(screen) < 0){
             die("video: %s", getError());

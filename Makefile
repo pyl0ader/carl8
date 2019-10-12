@@ -1,12 +1,15 @@
-HDR = video.h input.h interpreter.h error.h
-SRC = main.c video.c input.c error.c interpreter.c
+INC = -lSDL2
+FLAGS = -g ${INC}
+
+HDR = video.h input.h interpreter.h logError.h
+SRC = main.c video.c input.c logError.c interpreter.c
 OBJ = ${SRC:.c=.o}
 
 chipper: ${OBJ} 
-	cc -g -lSDL2 -o $@ $^
+	cc ${FLAGS} -o $@ $^
 	
 .c.o:
-	cc -g -c $<
+	cc ${FLAGS} -c $<
 
 ${OBJ}: ${HDR}
 

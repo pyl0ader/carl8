@@ -1,7 +1,7 @@
 #include <SDL2/SDL.h>
 
 #include "video.h"
-#include "error.h"
+#include "logError.h"
 
 const unsigned short WIDTH = 640;
 const unsigned short HEIGHT = 480;
