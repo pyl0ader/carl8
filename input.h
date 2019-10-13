@@ -1,5 +1,5 @@
-void initializeInput(void);
-void inputProcess();
+int initializeInput(void);
+int inputProcess();
 
 extern struct Action {
     unsigned char quit;
