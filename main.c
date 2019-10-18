@@ -46,7 +46,7 @@ int main(int argc, char** argv)
             die("input: %s", getError());
         }
         for(int i=0; i < 16; i++){
-            screen[i] = (action.hexKey & (1 << i)) > 0; 
+            screen[i] = (action.interpreterInput & (1 << i)) > 0; 
         }
         if(videoProcess(screen) < 0){
             die("video: %s", getError());

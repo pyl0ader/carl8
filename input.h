@@ -2,6 +2,6 @@ int initializeInput(void);
 int inputProcess();
 
 extern struct Action {
-    unsigned char quit;
-    unsigned int hexKey;
+    uint8_t quit;
+    uint16_t interpreterInput;
 } action;

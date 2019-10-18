@@ -51,9 +51,9 @@ int inputProcess()
                 key &= 0xf;
 
                 /* update bit if the corrosponding key is pressed or released */
-                if( !(action.hexKey & (0b1 << key)) && e.type == SDL_KEYDOWN
-                ||    action.hexKey & (0b1 << key)  && e.type == SDL_KEYUP){
-                    action.hexKey ^= 0b1 << key;
+                if( !(action.interpreterInput & (0b1 << key)) && e.type == SDL_KEYDOWN
+                ||    action.interpreterInput & (0b1 << key)  && e.type == SDL_KEYUP){
+                    action.interpreterInput ^= 0b1 << key;
                 }
             }
         }
