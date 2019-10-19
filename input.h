@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 int initializeInput(void);
 int inputProcess();
 

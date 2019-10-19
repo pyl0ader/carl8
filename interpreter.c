@@ -3,14 +3,7 @@
 #include "logError.h"
 #include "interpreter.h"
 
-/* enum */
-enum {
-    NNN,
-    X,
-    Y,
-    KK,
-    N
-};
+/* opcodes enum */
 
 /* static function declaration */
 static int loadRom(FILE *rom);
@@ -58,11 +51,34 @@ getInstruction(uint16_t addr)
 #include <string.h>
 #define STRING_SIZE 80
 
+#define SET_LOGIC(ADDR) /* set logic */
+#define IS_LOGIC(ADDR) /* is logic */
 int
 disassemble()
 { 
+    /*
+    int addr = 0x200;
+    int branchStack[0x1000 - 0x200];
+    int* branchPointer = &branchStack[1];
+
+    memset(branchStack, 0, sizeof branchStack);
     //step one: differentiate logic from data
+    while(addr < 0x1000 && !IS_LOGIC(addr) || addr = *(--branchPointer))
+    {
+        SET_LOGIC(addr);
+        if( is branch ){
+            *branchPointer++ = addr+2;
+            addr+=4;
+        }
+        else if( is jump ){
+            addr = addr of jump;
+        }
+        else{
+            addr+=2
+        }
+    }
     //step two: step through logic printing instructions
+    */
     return 0;
 } 
 

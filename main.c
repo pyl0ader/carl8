@@ -3,8 +3,8 @@
 #include "interpreter.h"
 #include "logError.h"
 
-#define TITLE "chipper"
-#define USAGE "usage: chipper [-d] ROM"
+#define TITLE "carl8"
+#define USAGE "usage: carl8 [-d] ROM"
 
 void die(const char* fmt, ...);
 

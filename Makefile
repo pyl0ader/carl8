@@ -5,7 +5,7 @@ HDR = video.h input.h interpreter.h logError.h
 SRC = main.c video.c input.c logError.c interpreter.c
 OBJ = ${SRC:.c=.o}
 
-chipper: ${OBJ} 
+carl8: ${OBJ} 
 	cc ${FLAGS} -o $@ $^
 	
 .c.o:
@@ -14,4 +14,4 @@ chipper: ${OBJ}
 ${OBJ}: ${HDR}
 
 clean:
-	rm chipper *.o
+	rm carl8 *.o
