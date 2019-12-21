@@ -2,7 +2,7 @@
 
 /* function declarations */
 int initializeInterpreter(const char* file);
-int interpreterProcess(void);
+int step(void);
 int disassemble();
 
 /* array declaration */

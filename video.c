@@ -3,38 +3,48 @@
 #include "video.h"
 #include "logError.h"
 
+/* variables */
 const unsigned short WIDTH = 640;
 const unsigned short HEIGHT = 480;
 
-static SDL_Window *win;
-static SDL_Renderer *ren;
+static SDL_Window *window;
+static SDL_Renderer *renderer;
 
+/* function definitions */
+
+/* SDL video is initialized. An SDL_Window is created with the title name
+ * and window is set to it. An SDL_Renderer is created and renderer is set to it.
+ * Return value is -1 if errors occur, otherwise it is 0. */
 int initializeVideo(const char* name)
 {
     if(SDL_Init(SDL_INIT_VIDEO) != 0){
-        logError("SDL_Init", SDL_GetError());
+        setError("SDL_Init: %s", SDL_GetError());
         return -1;
     }
-    win = SDL_CreateWindow(name, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT, 0);
-    if(win == NULL){
-        logError("SDL_CreateWindow", SDL_GetError());
+    window = SDL_CreateWindow(name, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT, 0);
+    if(window == NULL){
+        setError("SDL_CreateWindow: %s", SDL_GetError());
         return -1;
     }
-    ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    if(ren == NULL){
-        logError("SDL_CreateRenderer", SDL_GetError());
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC );
+    if(renderer == NULL){
+        setError("SDL_CreateRenderer: %s", SDL_GetError());
         return -1;
     }
 
     if(clear()  < 0){
-        logError("clear", getError());
+        setError("clear: %s", getError());
         return -1;
     }
 
     return 0;
 }
 
-int videoProcess(unsigned char screen[64 * 32])
+/* For every nonzero element of screen, using renderer, a white filled Rectangle 
+ * is rendered at that element's index in a 64 x 32 representation of screen. 
+ * Rectangles are stretched/scaled with respect to the dimensions of window.
+ * Return value is -1 if errors occur, otherwise it is 0. */
+int videoProcess(unsigned char back[64 * 32])
 {
     int x, y, i;
     SDL_Rect pixel;
@@ -42,47 +52,65 @@ int videoProcess(unsigned char screen[64 * 32])
     pixel.w = WIDTH / 64;
     pixel.h = HEIGHT / 32;
 
-    if(clear()  < 0){
-        logError("clear", getError());
-        return -1;
-    }
+    static unsigned char front[64 * 32] = {};
+    unsigned char changed = 0;
 
-    if(SDL_SetRenderDrawColor(ren, 255, 255, 255, SDL_ALPHA_OPAQUE) < 0){
-        logError("SDL_SetRenderDrawColor", SDL_GetError());
-        return -1;
-    }
-    for(y = 0; y < 32; y++){
-        for(x = 0; x < 64; x++){
-            if(screen[y * 64 + x]){
-                pixel.x = x * pixel.w;
-                pixel.y = y * pixel.h;
-                if(SDL_RenderFillRect(ren, &pixel) < 0){
-                    logError("SDL_RenderFillRect", SDL_GetError());
-                    return -1;
+    for(y = 0; y < 32; y++)
+    {
+        for(x = 0; x < 64; x++)
+        {
+            unsigned char coordinates = y * 64 + x;
+            if(back[coordinates] ^ front[coordinates])
+            {
+                if(!changed){
+                    changed = 1;
+                    if(clear()  < 0){
+                        setError("clear: %s", getError());
+                        return -1;
+                    }
+
+                    if(SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE) < 0){
+                        setError("SDL_SetRenderDrawColor: %s", SDL_GetError());
+                        return -1;
+                    }
                 }
+                if(back[coordinates]){
+                    pixel.x = x * pixel.w;
+                    pixel.y = y * pixel.h;
+                    if(SDL_RenderFillRect(renderer, &pixel) < 0){
+                        setError("SDL_RenderFillRect: %s", SDL_GetError());
+                        return -1;
+                    }
+                }
+                front[coordinates] = back[coordinates];
             }
         }
     }
-    SDL_RenderPresent(ren);
+
+    if(changed) SDL_RenderPresent(renderer);
     return 0;
 }
 
+/* renderer is wiped black.
+ * Return value is -1 if errors occur, otherwise it is 0. */
 int clear(void)
 {
-    if(SDL_SetRenderDrawColor(ren, 0, 0, 0, SDL_ALPHA_OPAQUE) < 0){
-        logError("SDL_SetRenderDrawColor", SDL_GetError());
+    if(SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE) < 0){
+        setError("SDL_SetRenderDrawColor: %s", SDL_GetError());
         return -1;
     }
-    if(SDL_RenderClear(ren) < 0){
-        logError("SDL_RenderClear", SDL_GetError());
+    if(SDL_RenderClear(renderer) < 0){
+        setError("SDL_RenderClear: %s", SDL_GetError());
         return -1;
     }
     return 0;
 }
 
+/* renderer and window are destroyed. SDL is closed.
+ * Errors are ignored. */
 void closeVideo(void)
 {
-    SDL_DestroyRenderer(ren);
-    SDL_DestroyWindow(win);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
     SDL_Quit();
 }

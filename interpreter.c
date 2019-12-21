@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #include "logError.h"
 #include "interpreter.h"
@@ -32,22 +33,13 @@ enum parameters {
     B
 };
 
-typedef struct instructionType {
+typedef struct instruction {
     char opSymbol[5];
     uint16_t opcode;
     uint8_t parameterSegments[3];
     uint8_t parameters[3];
     uint8_t isBranch;
     uint8_t isJump;
-} InstructionType;
-
-typedef struct instruction {
-    const InstructionType *type;
-    uint16_t nnn;
-    uint8_t kk;
-    uint8_t x;
-    uint8_t y;
-    uint8_t n;
 } Instruction;
 
 /* static function declaration */
@@ -62,10 +54,16 @@ static uint16_t i_register = 0;
 
 static uint16_t pc_register = 0x200;
 
-/* array */
+static uint16_t nnn;
+static uint8_t kk;
+static uint8_t x;
+static uint8_t y;
+static uint8_t n;
+
+/* arrays */
 uint8_t screen[64 * 32];
 
-static const InstructionType instructionTypes[] = {
+static const Instruction instructionSet[] = {
 /*  opsymbol opcode  parameterSegments  parameters        isBranch  isJump */
     {"CLS",  0x00E0, {0},               {0},              0,        0},
     {"RET",  0x00EE, {0},               {0},              0,        0},
@@ -106,16 +104,24 @@ static const InstructionType instructionTypes[] = {
 
 /* function definitions */
 
-/* Starting at index 512, write contents of file rom to memory.
- * TODO: error handling. */
+/* Starting at index 512, the content of _rom_ is copied to _memory_.
+ * Return value is -1 if errors occur, otherwise it is 0.
+ */
 int loadRom(FILE *rom)
 {
     programSize = fread(&memory[0x200], sizeof(uint8_t), 0x1000 - 0x200, rom);
+    if( ferror(rom) || !feof(rom) ){
+        setError("fread: %s", strerror(errno));
+        return -1;
+    }
+    while(!memory[0x200 + programSize - 1])
+        --programSize;
     return 0;
 }
 
-/* Set memory to all zeros, then load file into memory.
- * Return 0 on success, or return -1 if errors occur. */
+/* _memory_ is set to all zeros, then the content of _file_ is copied to _memory_.
+ * Return value is -1 if errors occur, otherwise it is 0.
+ */
 int initializeInterpreter(const char* file)
 { 
     FILE* load;
@@ -124,12 +130,12 @@ int initializeInterpreter(const char* file)
 
     memset(memory, 0, 4096);
     if(load == NULL){
-        logError("fopen","could not open file");
+        setError("fopen: %s", strerror(errno));
         return -1;
     }
 
     if(loadRom(load) < 0){
-        logError("loadRom", getError());
+        setError("loadRom: %s", getError());
         return -1;
     }
     return 0; 
@@ -137,10 +143,13 @@ int initializeInterpreter(const char* file)
 
 int step(void){}
 
-/* Set instruction to the instruction 
- * decoded from memory at addr.
- * Return 0 on success, or return -1 if errors occur */
-int decode(Instruction* instruction, uint16_t addr)
+/* The _Instruction_ pointer pointed by _ins_ is set to set to point to the element of _instructionSet_
+ * which represents the encoded intruction in _memory_ at index _addr_.
+ * Static variables _nnn_, _kk_, _x_, _y_, and _n_ are also set to the values
+ * in said encoding (if they exist, otherwise they remain unchanged).
+ * Return value is -1 if errors occur, otherwise it is 0.
+ */
+int decode(const Instruction **ins, uint16_t addr)
 {
     uint16_t word = WORD(addr);
     uint8_t nibble = word >> 12;
@@ -149,98 +158,98 @@ int decode(Instruction* instruction, uint16_t addr)
         case 0x0:
             switch(word & 0xfff){
                 case 0x0e0:
-                    instruction->type = instructionTypes;    //00e0 CLS
+                    *ins = instructionSet;    //00e0 CLS
                     break;
                 case 0x0ee:
-                    instruction->type = instructionTypes + 1;      //00ee RET
+                    *ins = instructionSet + 1;      //00ee RET
                     break;
                 default:
-                    instruction->type = instructionTypes + 3;      //0nnn SYS
+                    *ins = instructionSet + 3;      //0nnn SYS
                     break;
             }
             break;
         case 0x8:
             if((word & 0xf) == 0xe){
-                instruction->type = instructionTypes + 18;         //8xyE SHL
+                *ins = instructionSet + 18;         //8xyE SHL
                 break;
             }
             else if((word & 0xf) < 8){
-                instruction->type = instructionTypes + (10 + (word & 0xf)); //8xy(0-7) 
+                *ins = instructionSet + (10 + (word & 0xf)); //8xy(0-7) 
                 break;
             }
-            logError("", "unknown opcode");
+            setError("unknown opcode");
             return -1;
         case 0xe:
             switch(word & 0xff){
                 case 0x9e:
-                    instruction->type = instructionTypes + 24;     //Ex9E SKP
+                    *ins = instructionSet + 24;     //Ex9E SKP
                     break;
                 case 0xa1:
-                    instruction->type = instructionTypes + 25;     //ExA1 SKNP
+                    *ins = instructionSet + 25;     //ExA1 SKNP
                     break;
                 default:
-                    logError("", "unknown opcode");
+                    setError("unknown opcode");
                     return -1;
             }
             break;
         case 0xf:
             switch(word & 0xff){
                 case 0x07:
-                    instruction->type = instructionTypes + 26;     //Fx07 LD
+                    *ins = instructionSet + 26;     //Fx07 LD
                     break;
                 case 0x0a:
-                    instruction->type = instructionTypes + 27;     //Fx0A LD
+                    *ins = instructionSet + 27;     //Fx0A LD
                     break;
                 case 0x15:
-                    instruction->type = instructionTypes + 28;     //Fx15 LD
+                    *ins = instructionSet + 28;     //Fx15 LD
                     break;
                 case 0x18:
-                    instruction->type = instructionTypes + 29;     //Fx18 LD
+                    *ins = instructionSet + 29;     //Fx18 LD
                     break;
                 case 0x1e:
-                    instruction->type = instructionTypes + 30;     //Fx1E ADD
+                    *ins = instructionSet + 30;     //Fx1E ADD
                     break;
                 case 0x29:
-                    instruction->type = instructionTypes + 31;     //Fx29 LD
+                    *ins = instructionSet + 31;     //Fx29 LD
                     break;
                 case 0x33:
-                    instruction->type = instructionTypes + 32;     //Fx33 LD
+                    *ins = instructionSet + 32;     //Fx33 LD
                     break;
                 case 0x55:
-                    instruction->type = instructionTypes + 33;     //Fx55 LD
+                    *ins = instructionSet + 33;     //Fx55 LD
                     break;
                 case 0x65:
-                    instruction->type = instructionTypes + 34;     //Fx65 LD
+                    *ins = instructionSet + 34;     //Fx65 LD
                     break;
                 default:
-                    logError("", "unknown opcode");
+                    setError("unknown opcode");
                     return -1;
             }
             break;
         default:
             if(nibble > 8)
-                instruction->type = instructionTypes + (nibble + 10);
+                *ins = instructionSet + (nibble + 10);
             else
-                instruction->type = instructionTypes + (nibble + 2);
+                *ins = instructionSet + (nibble + 2);
             break;
     }
 
-    for(int i=0; i < 3 && instruction->type->parameterSegments[i]; i++){
-        switch(instruction->type->parameterSegments[i]){
+    for(int i=0; i < 3 && (*ins)->parameterSegments[i]; i++){
+        switch( (*ins)->parameterSegments[i] ){
             case NNN:
-                instruction->nnn = word & 0xfff;
+                nnn = word & 0xfff;
                 break;
             case KK:
-                instruction->kk = word & 0xff;
+                kk = word & 0xff;
                 break;
             case X:
-                instruction->x = (word & 0xf00) >> 8;
+                x = (word & 0xf00) >> 8;
                 break;
             case Y:
-                instruction->y = (word & 0xf0) >> 4;
+                y = (word & 0xf0) >> 4;
                 break;
             case N:
-                instruction->n = word & 0xf;
+                n = word & 0xf;
                 break;
         }
     }
@@ -248,41 +257,50 @@ int decode(Instruction* instruction, uint16_t addr)
     return 0;
 }
 
-#define SET_LOGIC(ADDR) (logic[ADDR >> 3] |= 1 << (ADDR & 7) )
-#define IS_LOGIC(ADDR) (logic[ADDR >> 3] & (1 << (ADDR & 7) ) )
+#define SET_LOGIC(ADDR) (addrFlags[ADDR >> 2] |= 1 << (ADDR & 3) * 2 + 0 )
+#define IS_LOGIC(ADDR)  (addrFlags[ADDR >> 2] & (1 << (ADDR & 3) * 2 + 0 )  )
+
+#define SET_LABEL(ADDR) (addrFlags[ADDR >> 2] |= 1 << (ADDR & 3) * 2 + 1)
+#define IS_LABEL(ADDR)  (addrFlags[ADDR >> 2] & (1 << (ADDR & 3) * 2 + 1)  )
 
 /* If a program is loaded it is translated to an Assembly Language.
- * The Assembly text is then written to stdout.
- * Returns 0 on success, or returns -1 if errors occur. */
+ * The Assembly text is then written to _stdout_.
+ * Return value is -1 if errors occur, otherwise it is 0.
+ */
 int disassemble()
 { 
-    uint8_t logic[4096 / 8];
+    uint8_t addrFlags[4096 / 4];
 
     int addr = 0x200;
-    int branchStack[0x1000 - 0x200];
+    int branchStack[(4096 - 0x200) / 2];
     int* branchPointer = &branchStack[1];
 
-    Instruction instruction;
+    const Instruction *instruction;
 
     memset(branchStack, 0, sizeof branchStack);
-    memset(logic, 0, sizeof logic);
+    memset(addrFlags, 0, sizeof addrFlags);
 
-    while(addr < 0x1000 && !IS_LOGIC(addr) && WORD(addr) || ( addr = *(--branchPointer) ))
+    /* The program's control flow is traced to discern program instructions
+     * from sprite data.
+     */
+    while(addr < 0x1000 && !IS_LOGIC(addr) || ( addr = *(--branchPointer) ))
     {
         SET_LOGIC(addr);
         decode(&instruction, addr);
-        if( instruction.type->isBranch ){
+        if( instruction->isBranch ){
             *(branchPointer++) = addr+2;
             addr+=4;
         }
-        else if( instruction.type->isJump ){
-            addr = instruction.nnn;
+        else if( instruction->isJump ){
+            addr = nnn;
+            SET_LABEL(addr);
         }
-        else if(instruction.type->opcode == 0x2000){ // CALL
+        else if(instruction->opcode == 0x2000){ // CALL
             *(branchPointer++) = addr+2;
-            addr = instruction.nnn;
+            addr = nnn;
+            SET_LABEL(addr);
         }
-        else if(instruction.type->opcode == 0x00ee){ // RET
+        else if(instruction->opcode == 0x00ee){ // RET
             continue;
         }
         else{
@@ -290,38 +308,46 @@ int disassemble()
         }
     }
 
-    char op[STRING_SIZE] = "";
-    char arguments[STRING_SIZE] = "";
-    char token[STRING_SIZE] = "";
-    uint8_t spriteData[STRING_SIZE];
-    uint8_t spriteDataCount = 0;
     addr = 0x200;
 
+    char token[STRING_SIZE] = "";
+
+    char op[STRING_SIZE] = "";
+    char arguments[STRING_SIZE] = "";
+
+    uint8_t spriteData[0xe00];
+    unsigned int spriteDataCount = 0;
+
+    /* Encoded instructions are translated to symbolic instructions,
+     * and sprite data to data directives. Then they are printed to 
+     * _stdout_.
+     */
     memset(spriteData, 0, STRING_SIZE);
+
     while(addr < 0x200 + programSize){
         if(IS_LOGIC(addr)){
             decode(&instruction, addr);
-            snprintf(op, STRING_SIZE, "0x%x:\t%-5s", addr, instruction.type->opSymbol);
+            strcpy(op, instruction->opSymbol);
 
-            for(int i=0; i < 3 && instruction.type->parameters[i]; i++){
-                switch(instruction.type->parameters[i]){
+            for(int i=0; i < 3 && instruction->parameters[i]; i++){
+                switch(instruction->parameters[i]){
                     case ADDR:
-                        snprintf(token, STRING_SIZE, "0x%03x", instruction.nnn);
+                        snprintf(token, STRING_SIZE, "#%03X", nnn);
                         break;
                     case BYTE:
-                        snprintf(token, STRING_SIZE, "%02X", instruction.kk);
+                        snprintf(token, STRING_SIZE, "#%02X", kk);
                         break;
                     case NIBBLE:
-                        snprintf(token, STRING_SIZE, "#%02d", instruction.n);
+                        snprintf(token, STRING_SIZE, "#%X", n);
                         break;
                     case V0:
                         snprintf(token, STRING_SIZE, "V0");
                         break;
                     case VX:
-                        snprintf(token, STRING_SIZE, "V%X", instruction.x);
+                        snprintf(token, STRING_SIZE, "V%X", x);
                         break;
                     case VY:
-                        snprintf(token, STRING_SIZE, "V%X", instruction.y);
+                        snprintf(token, STRING_SIZE, "V%X", y);
                         break;
                     case DT:
                         snprintf(token, STRING_SIZE, "DT");
@@ -342,29 +368,37 @@ int disassemble()
                         snprintf(token, STRING_SIZE, "B");
                         break;
                 }
-                if(instruction.type->parameters[i+1]){     /* Add comma if more argument tokens follow */
+                if(instruction->parameters[i+1]){ //Add comma if more argument tokens follow
                     strncat(token, ", ", STRING_SIZE);
                 }
                 strncat(arguments, token, STRING_SIZE);
             }
-            printf("%s\t%-20s;%X\n", op, arguments, WORD(addr));
+            if(IS_LABEL(addr)) printf("0x%03X:\t%s\t%-20s;%04X\n", addr, op, arguments, WORD(addr));
+            else  printf("\t%s\t%-20s;%04X\n", op, arguments, WORD(addr));
 
             addr += 2;
         }
         else {
+
+            /* When a segment of sprite data is encountered, it is collected in 
+             * _spriteData_.
+             */
             spriteData[spriteDataCount++] = memory[addr];
 
-            addr++;
+            ++addr;
             if(IS_LOGIC(addr) || addr >= 0x200 + programSize){
 
+                /* When the end of that segment arrives it is printed, and
+                 * _spriteData_ is set to be overwritten by the next segment.
+                 */
                 int i = 0;
                 while( i < spriteDataCount ){
-                    snprintf(op, STRING_SIZE, "0x%x:\t%-5s", (addr - spriteDataCount) + i, "db");
+                    snprintf(op, STRING_SIZE, "0x%03X:\t%-5s", (addr - spriteDataCount) + i, "db");
 
                     for(int j=0; i < spriteDataCount && j < 4; j++, i++){
-                        snprintf(token, STRING_SIZE, "#%X", spriteData[i]);
+                        snprintf(token, STRING_SIZE, "#%02X", spriteData[i]);
 
-                        if(j+1 < 4 && i+1 < spriteDataCount){      /* Add comma if more byte tokens follow */
+                        if(j+1 < 4 && i+1 < spriteDataCount){ //Add comma if more byte tokens follow
                             strncat(token, ", ", STRING_SIZE);
                         }
                         strncat(arguments, token, STRING_SIZE);

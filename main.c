@@ -6,7 +6,7 @@
 #define TITLE "carl8"
 #define USAGE "usage: carl8 [-d] ROM"
 
-void die(const char* fmt, ...);
+void die(void);
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -17,39 +17,51 @@ int main(int argc, char** argv)
     FILE *load;
 
     if(argc != 2 && argc != 3){
-        die(USAGE);
+        setError(USAGE);
+        presentErrorLog();
+        die();
     } 
 
-    if(argc == 3 ? initializeInterpreter(argv[2]) :  initializeInterpreter(argv[1]) < 0){
-        die("initializeInterpreter: %s", getError());
+    if(argc == 3 ? initializeInterpreter(argv[2]) < 0 :  initializeInterpreter(argv[1]) < 0){
+        setError("initializeInterpreter: %s", getError());
+        presentErrorLog();
+        die();
     }
 
     if( argc == 3 ){
-        if(strcmp(argv[1], "-d") != 0) die(USAGE);
+        if(strcmp(argv[1], "-d") != 0){ 
+            setError(USAGE);
+            presentErrorLog();
+            die();
+        }
 
         if(disassemble() < 0){
-            die("disassemble: ", getError());
+            setError("disassemble: %s", getError());
+            presentErrorLog();
+            die();
         }
         exit(0);
     }
     
     if(initializeVideo(TITLE) < 0){
-        die("initializeVideo: %s", getError());
+        setError("initializeVideo: %s", getError());
+        presentErrorLog();
+        die();
     }
 
-    if(initializeInput() < 0){ //currently no error handling for input
-        die("initializeInput: %s", getError());
-    }
+    initializeInput();
 
     while(!action.quit){
-        if(inputProcess() < 0){
-            die("input: %s", getError());
-        }
+        inputProcess();
+        /*
         for(int i=0; i < 16; i++){
             screen[i] = (action.interpreterInput & (1 << i)) > 0; 
         }
+        */
+        step();
         if(videoProcess(screen) < 0){
-            die("video: %s", getError());
+            setError("video: %s", getError());
+            die();
         }
     }
 
@@ -58,17 +70,8 @@ int main(int argc, char** argv)
 
 #include <stdarg.h>
 
-void die(const char *fmt, ...)
+void die(void)
 {
     closeVideo();
-
-	va_list ap;
-
-	va_start(ap, fmt);
-	vfprintf(stderr, fmt, ap);
-	va_end(ap);
-
-    fputc('\n',stderr);
-
     exit(1);
 }

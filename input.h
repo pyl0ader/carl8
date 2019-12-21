@@ -1,7 +1,7 @@
 #include <stdint.h>
 
-int initializeInput(void);
-int inputProcess();
+void initializeInput(void);
+void inputProcess();
 
 extern struct Action {
     uint8_t quit;

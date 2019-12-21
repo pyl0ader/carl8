@@ -1,4 +1,7 @@
-#define ERROR_BUFFER_SIZE 80
+#define ERROR_BUFFER_SIZE 120
+#define ERROR_LOG_SIZE 80
 
-void logError(const char* context, const char* error);
+void setError(const char* fmt, ...);
 char* getError(void);
+void logError(void);
+void presentErrorLog(void);

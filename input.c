@@ -2,6 +2,7 @@
 
 #include "input.h"
 
+/* variables */
 struct Action action = {0, 0};
 static uint8_t map[256];
 
@@ -10,7 +11,11 @@ static uint8_t map[256];
 
 static SDL_Event e;
 
-int initializeInput(void)
+/* function definitions */
+
+/* map is set to all ones, integeral SDL Keysym indices in map are set
+ * to a corrosponding key value. */
+void initializeInput(void)
 {
     memset(map, 0xff, sizeof map);
 
@@ -33,11 +38,12 @@ int initializeInput(void)
     map[(uint8_t)SDLK_x] = 0x0;
     map[(uint8_t)SDLK_c] = 0xb;
     map[(uint8_t)SDLK_v] = 0xf;
-
-    return 0;
 }
 
-int inputProcess()
+/* For every event in the SDL event queue, bits corrosponding to a mapped key
+ * in the action.interpreterInput sequence are 
+ * updated upon press and release events. */
+void inputProcess()
 {
     uint8_t key;
 
@@ -59,5 +65,4 @@ int inputProcess()
         }
     }
 
-    return 0;
 }
