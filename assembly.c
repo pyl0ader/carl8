@@ -13,13 +13,13 @@
 #define BRANCHES_MAX ( (INTERP_MEMORY_LEN - INTERP_PROGRAM_START) / 2 )
 #define ADDR_FLAGS_LEN (INTERP_MEMORY_LEN / 4)
 
-#define WORD(ADDR) ( interp_readMemory(ADDR) << 8 | interp_readMemory(ADDR + 1) )
+#define WORD(ADDR) ( interp_readMemory(ADDR) << 8 | interp_readMemory((ADDR) + 1) )
 
-#define SET_LOGIC(ADDR) (addrFlags[ADDR >> 2] |= 1 << (ADDR & 3) * 2 + 0 )
-#define IS_LOGIC(ADDR)  (addrFlags[ADDR >> 2] & (1 << (ADDR & 3) * 2 + 0 )  )
+#define SET_LOGIC(ADDR) (addrFlags[(ADDR) >> 2] |= 1 << ((ADDR) & 3) * 2 + 0 )
+#define IS_LOGIC(ADDR)  (addrFlags[(ADDR) >> 2] & (1 << ((ADDR) & 3) * 2 + 0 )  )
 
-#define SET_LABEL(ADDR) (addrFlags[ADDR >> 2] |= 1 << (ADDR & 3) * 2 + 1)
-#define IS_LABEL(ADDR)  (addrFlags[ADDR >> 2] & (1 << (ADDR & 3) * 2 + 1)  )
+#define SET_LABEL(ADDR) (addrFlags[(ADDR) >> 2] |= 1 << ((ADDR) & 3) * 2 + 1)
+#define IS_LABEL(ADDR)  (addrFlags[(ADDR) >> 2] & (1 << ((ADDR) & 3) * 2 + 1)  )
 
 enum parameter {
     PARAMETER_NONE = -7,
@@ -195,6 +195,10 @@ int assm_disassemble(void)
             addr = instruction.nnn;
             SET_LABEL(addr);
         }
+        else if( instruction.id == INTERP_LD_I_ADDR ){
+            SET_LABEL(instruction.nnn);
+            addr += 2;
+        }
         else if(instruction.id == INTERP_CALL_ADDR){
             *branchPointer++ = addr+2;
             addr = instruction.nnn;
@@ -221,7 +225,7 @@ int assm_disassemble(void)
      * and sprite data to data directives. Then they are printed to 
      * _stdout_.
      */
-    memset(spriteData, 0, 0xe00);
+    memset(spriteData, 0, INTERP_SPRITE_DATA_MAX);
 
     programSize = interp_getProgramSize();
     while(addr < 0x200 + programSize )
@@ -242,7 +246,17 @@ int assm_disassemble(void)
             {
                 switch(*i){
                     case PARAMETER_ADDR:
-                        snprintf(token, TOKEN_SIZE, "L%03X", instruction.nnn);
+                        /* if the address parameter is not inside the program, or
+                         * for some god known reason in the middle of an instruction
+                         * then that address can not be labeled and the parameter will be an 
+                         * address literal
+                         */
+                        if( !(instruction.nnn % 2 == 1 && IS_LOGIC(instruction.nnn - 1)) 
+                            && (instruction.nnn >= INTERP_PROGRAM_START && instruction.nnn < ( INTERP_PROGRAM_START + programSize) ) 
+                          )
+                            snprintf(token, TOKEN_SIZE, "L%03X" /* a labeled address */, instruction.nnn);
+                        else 
+                            snprintf(token, TOKEN_SIZE, "#%03X" /* an address literal */, instruction.nnn);
                         break;
                     case PARAMETER_BYTE:
                         snprintf(token, TOKEN_SIZE, "#%02X", instruction.kk);
@@ -283,25 +297,30 @@ int assm_disassemble(void)
             spriteData[spriteDataCount++] = interp_readMemory(addr);
 
             ++addr;
-            if(IS_LOGIC(addr) || addr >= INTERP_PROGRAM_START + programSize){
+            if( addr >= INTERP_PROGRAM_START + programSize || IS_LOGIC(addr) || IS_LABEL(addr) ){
 
                 /* When the end of that segment arrives it is printed, and
                  * _spriteData_ is set to be overwritten by the next segment.
                  */
                 int i = 0;
+                char label[TOKEN_SIZE]; 
+
+
+                printf("L%03X", (addr - spriteDataCount));
                 while( i < spriteDataCount ){
-                    snprintf(op, STRING_SIZE, "L%03X\t%-5s", (addr - spriteDataCount) + i, "db");
+                    strncpy(op, "db", TOKEN_SIZE);
 
                     for(int j=0; i < spriteDataCount && j < 4; j++, i++){
                         snprintf(token, TOKEN_SIZE, "#%02X", spriteData[i]);
 
                         strncat(arguments, token, STRING_SIZE - 1);
 
-                        if(j+1 < 4 && i+1 < spriteDataCount){ //space if more byte tokens follow 
+                        if(j+1 < 4 && i+1 < spriteDataCount)
+                        {   //space if more byte tokens follow 
                             strncat(arguments, " ", STRING_SIZE - 1);
                         }
                     }
-                    printf("%s\t%-10s\n", op, arguments);
+                    printf("\t%s\t%-10s\n", op, arguments);
                     arguments[0] = '\0';
                 }
                 spriteDataCount = 0;
@@ -341,7 +360,17 @@ static inline int createStatement(statement_t s, char* line){
 }
 
 static inline int isLabelSym(token_t tok){
-    if(strlen(tok) == 4 && tok[0] == 'L'){
+    if(strlen(tok) <= 8 && tok[0] == 'L' && strcmp(tok, "LD") != 0){
+        for(int i=1; i <= 8 && tok[i] != '\0'; i++)
+            if( !isalnum( tok[i] ) )
+                return 0;
+        return 1;
+    }
+    else return 0;
+}
+
+static inline int isAddressLiteral(token_t tok){
+    if(strlen(tok) == 4 && tok[0] == '#'){
         for(int i=1; i < 4; i++)
             if(!isxdigit(tok[i]))
                 return 0;
@@ -381,6 +410,22 @@ int assm_assemble(const char* fileName)
     int lineNumber = 1;
     int addr = INTERP_PROGRAM_START;
     int parameters[3];
+    util_linkedDictionary incompleteInstructions;
+    util_dictionary labels;
+
+    /* Dictionaries (or hashtables) are created for instructions that are 
+     * incomplete (as in the address of a label is not yet known) and for 
+     * labels themselves
+     */
+    if( util_createLinkedDictionary(&incompleteInstructions) < 0 ){
+        setError("util_createLinkedDictionary: %s", getError() );
+        return -1;
+    }
+
+    if( util_createDictionary(&labels) < 0){
+        setError("util_createDictionary: %s", getError() );
+        return -1;
+    }
 
     FILE* assemblyFile = fopen(fileName, "r");
 
@@ -389,6 +434,9 @@ int assm_assemble(const char* fileName)
         return -1;
     }
 
+    /* A statement type, _statement_t_, is used for parsing text.
+     * Theses statement types are arrays of token types _token_t_.
+     */
     statement_t statement = STATEMENT_INIT(8);
     for(int i = 0; i < 8; statement[i++] = TOKEN_INIT);
 
@@ -409,8 +457,51 @@ int assm_assemble(const char* fileName)
             return -1;
         }
 
-        if( isLabelSym(statement[statementIndex]) )
-            hashInstall(&statement[statementIndex++][1], addr);
+        /* If the first token is a label then the address 
+         * of this instruction is recorded in _labels_
+         */
+        if( isLabelSym(statement[statementIndex]) ){
+            if( util_insert(labels, 
+                    &statement[statementIndex][1],
+                    addr) < 0){
+                setError("util_insert: %s", getError() );
+                return -1;
+            }
+
+            util_linkedList* vals;
+
+            /* Then _incompleteInstructions_ is searched for
+             * this label.
+             *
+             * If any incomplete instructions are found they are 
+             * completed now and deleted from _incompleteInstructions_.
+             */
+            if( util_linkedSearch(incompleteInstructions,
+                    &statement[statementIndex][1],
+                    &vals) ) 
+            {
+                int incompleteLowByte;
+
+                do {
+                    incompleteLowByte = WORD(vals->val);
+                    incompleteLowByte |= addr;
+                    if( interp_writeMemory(vals->val, incompleteLowByte >> 8) < 0){
+                        setError("interp_writeMemory: %s", getError() );
+                        return -1;
+                    }
+                    if( interp_writeMemory(vals->val + 1, incompleteLowByte & 0xff) < 0){
+                        setError("interp_writeMemory: %s", getError() );
+                        return -1;
+                    }
+                    vals = vals->next;
+                } while(vals != NULL);
+
+                util_linkedDelete(incompleteInstructions, 
+                        &statement[statementIndex][1]);
+            }
+            ++statementIndex;
+        }
+
 
         if(strcmp(statement[statementIndex], "db") == 0)
         {    //is data directive 
@@ -466,6 +557,25 @@ int assm_assemble(const char* fileName)
                 if(parameterTokens[parameterIndex] == PARAMETER_UNKNOWN)
                 {
                     if( isLabelSym(statement[statementIndex]) ){
+                        int val;
+
+                        parameterTokens[parameterIndex] = PARAMETER_ADDR;
+
+                        if(util_search(labels, 
+                                    &statement[statementIndex][1],
+                                    &val) ) 
+                            instruction.nnn = val;
+
+                        else if( util_linkedInsert(incompleteInstructions,
+                                    &statement[statementIndex][1],
+                                    addr) < 0 ){
+                            setError("util_linkedInsert: %s:\n\t%d: %s",
+                                getError(),
+                                lineNumber,
+                                line);
+                        }
+                    }
+                    else if( isAddressLiteral(statement[statementIndex]) ){
                         parameterTokens[parameterIndex] = PARAMETER_ADDR;
                         instruction.nnn = (int)strtol(&statement[statementIndex][1], (char**)NULL, 16);
                     }

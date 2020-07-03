@@ -1,17 +1,17 @@
-INC = -lSDL2
-FLAGS = -g ${INC}
+INC=   -lm -lSDL2
+FLAGS= -g ${INC}
 
-HDR = video.h input.h interpreter.h logError.h
-SRC = main.c video.c input.c logError.c interpreter.c
-OBJ = ${SRC:.c=.o}
+HDR=input.h video.h logError.h interpreter.h interpreter_codec.h util.h assembly.h 
+SRC=input.c video.c logError.c interpreter.c util.c assembly.c
+OBJ=${SRC:.c=.o}
 
-carl8: ${OBJ} 
-	cc ${FLAGS} -o $@ $^
-	
+carl8: ${OBJ} main.c
+	gcc -o $@ main.c ${OBJ} ${FLAGS}
+
 .c.o:
-	cc ${FLAGS} -c $<
+	gcc -c ${FLAGS} $<
 
 ${OBJ}: ${HDR}
 
 clean:
-	rm carl8 *.o
+	rm *.o carl8

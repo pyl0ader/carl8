@@ -12,8 +12,8 @@ static SDL_Renderer *renderer;
 
 /* function definitions */
 
-/* SDL video is initialized. An SDL_Window is created with the title name
- * and window is set to it. An SDL_Renderer is created and renderer is set to it.
+/* SDL video is initialized. An _SDL_Window_ is created with the title _name_
+ * and _window_ is set to it. An _SDL_Renderer_ is created and _renderer_ is set to it.
  * Return value is -1 if errors occur, otherwise it is 0. */
 int initializeVideo(const char* name)
 {
@@ -40,11 +40,11 @@ int initializeVideo(const char* name)
     return 0;
 }
 
-/* For every nonzero element of screen, using renderer, a white filled Rectangle 
- * is rendered at that element's index in a 64 x 32 representation of screen. 
- * Rectangles are stretched/scaled with respect to the dimensions of window.
+/* For every nonzero element of _back_, using _renderer_, a white filled Rectangle 
+ * is rendered at that element's index in a 64 x 32 representation of _back_. 
+ * Rectangles are stretched/scaled with respect to the dimensions of _window_.
  * Return value is -1 if errors occur, otherwise it is 0. */
-int videoProcess(unsigned char back[64 * 32])
+extern int draw(uint8_t back[64 * 32])
 {
     int x, y, i;
     SDL_Rect pixel;
@@ -91,7 +91,7 @@ int videoProcess(unsigned char back[64 * 32])
     return 0;
 }
 
-/* renderer is wiped black.
+/* _renderer_ is wiped black.
  * Return value is -1 if errors occur, otherwise it is 0. */
 int clear(void)
 {
@@ -106,7 +106,7 @@ int clear(void)
     return 0;
 }
 
-/* renderer and window are destroyed. SDL is closed.
+/* _renderer_ and _window_ are destroyed. SDL is closed.
  * Errors are ignored. */
 void closeVideo(void)
 {
