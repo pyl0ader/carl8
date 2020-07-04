@@ -6,7 +6,7 @@
 
 #include "util.h"
 #include "logError.h"
-#include "interpreter_codec.h"
+#include "interpreter.h"
 
 #define STRING_SIZE 80
 #define TOKEN_SIZE 5

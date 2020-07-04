@@ -9,8 +9,6 @@
 #include "input.h"
 #include "video.h"
 
-#include "interpreter_codec.h"
-
 #define WORD(ADDR) ( interp_memory[ADDR] << 8 | interp_memory[(ADDR)+1] )
 #define V_REGISTER_LEN 16
 #define SCREEN_LEN 64 * 32
