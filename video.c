@@ -52,35 +52,37 @@ extern int draw(uint8_t back[64 * 32])
     pixel.w = WIDTH / 64;
     pixel.h = HEIGHT / 32;
 
-    static unsigned char front[64 * 32] = {};
+    static unsigned char front[64 * 32] = {0};
     unsigned char changed = 0;
 
     for(y = 0; y < 32; y++)
     {
         for(x = 0; x < 64; x++)
         {
-            unsigned char coordinates = y * 64 + x;
+            int coordinates = y * 64 + x;
             if(back[coordinates] ^ front[coordinates])
             {
-                if(!changed){
+                if(!changed)
                     changed = 1;
-                    if(clear()  < 0){
-                        setError("clear: %s", getError());
-                        return -1;
-                    }
 
-                    if(SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE) < 0){
+                if(back[coordinates] && !front[coordinates]) { /* draw */
+                    if(SDL_SetRenderDrawColor(renderer, 0xff, 0xff, 0xff, SDL_ALPHA_OPAQUE) < 0){
                         setError("SDL_SetRenderDrawColor: %s", SDL_GetError());
                         return -1;
                     }
                 }
-                if(back[coordinates]){
-                    pixel.x = x * pixel.w;
-                    pixel.y = y * pixel.h;
-                    if(SDL_RenderFillRect(renderer, &pixel) < 0){
-                        setError("SDL_RenderFillRect: %s", SDL_GetError());
+                else if(!back[coordinates] && front[coordinates]) { /* erase */
+                    if(SDL_SetRenderDrawColor(renderer, 0x0, 0x0, 0x0, SDL_ALPHA_OPAQUE) < 0){
+                        setError("SDL_SetRenderDrawColor: %s", SDL_GetError());
                         return -1;
                     }
+                }
+
+                pixel.x = x * pixel.w;
+                pixel.y = y * pixel.h;
+                if(SDL_RenderFillRect(renderer, &pixel) < 0){
+                    setError("SDL_RenderFillRect: %s", SDL_GetError());
+                    return -1;
                 }
                 front[coordinates] = back[coordinates];
             }
@@ -99,6 +101,7 @@ int clear(void)
         setError("SDL_SetRenderDrawColor: %s", SDL_GetError());
         return -1;
     }
+
     if(SDL_RenderClear(renderer) < 0){
         setError("SDL_RenderClear: %s", SDL_GetError());
         return -1;
