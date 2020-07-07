@@ -143,21 +143,261 @@ int interp_loadRom(const char* rom)
     return 0;
 }
 
-/* _interp_memory_ is set to all zeros.
+/* _interp_memory_ is set to all zeros. Font sprites are loaded.
  * No error handling at the moment, return value is 0.
  */
 int interp_initialize(void){
     memset(interp_memory, 0, INTERP_MEMORY_LEN);
+
+    /* "0" Hex */
+    interp_memory[0] = 0xF0;
+    interp_memory[1] = 0x90;
+    interp_memory[2] = 0x90;
+    interp_memory[3] = 0x90;
+    interp_memory[4] = 0xF0;
+
+    /* "1" Hex */
+    interp_memory[5] = 0x20;
+    interp_memory[6] = 0x60;
+    interp_memory[7] = 0x20;
+    interp_memory[8] = 0x20;
+    interp_memory[9] = 0x70;
+
+    /* "2" Hex */
+    interp_memory[10] = 0xF0;
+    interp_memory[11] = 0x10;
+    interp_memory[12] = 0xF0;
+    interp_memory[13] = 0x80;
+    interp_memory[14] = 0xF0;
+
+    /* "3" Hex */
+    interp_memory[15] = 0xF0;
+    interp_memory[16] = 0x10;
+    interp_memory[17] = 0xF0;
+    interp_memory[18] = 0x10;
+    interp_memory[19] = 0xF0;
+
+    /* "4" Hex */
+    interp_memory[20] = 0x90;
+    interp_memory[21] = 0x90;
+    interp_memory[22] = 0xF0;
+    interp_memory[23] = 0x10;
+    interp_memory[24] = 0x10;
+
+    /* "5" Hex */
+    interp_memory[25] = 0xF0;
+    interp_memory[26] = 0x80;
+    interp_memory[27] = 0xF0;
+    interp_memory[28] = 0x10;
+    interp_memory[29] = 0xF0;
+
+    /* "6" Hex */
+    interp_memory[30] = 0xF0;
+    interp_memory[31] = 0x80;
+    interp_memory[32] = 0xF0;
+    interp_memory[33] = 0x90;
+    interp_memory[34] = 0xF0;
+
+    /* "7" Hex */
+    interp_memory[35] = 0xF0;
+    interp_memory[36] = 0x10;
+    interp_memory[37] = 0x20;
+    interp_memory[38] = 0x40;
+    interp_memory[39] = 0x40;
+
+    /* "8" Hex */
+    interp_memory[40] = 0xF0;
+    interp_memory[41] = 0x90;
+    interp_memory[42] = 0xF0;
+    interp_memory[43] = 0x90;
+    interp_memory[44] = 0xF0;
+
+    /* "9" Hex */
+    interp_memory[45] = 0xF0;
+    interp_memory[46] = 0x90;
+    interp_memory[47] = 0xF0;
+    interp_memory[48] = 0x10;
+    interp_memory[49] = 0xF0;
+
+    /* "A" Hex */
+    interp_memory[50] = 0xF0;
+    interp_memory[51] = 0x90;
+    interp_memory[52] = 0xF0;
+    interp_memory[53] = 0x90;
+    interp_memory[54] = 0x90;
+
+    /* "B" Hex */
+    interp_memory[55] = 0xE0;
+    interp_memory[56] = 0x90;
+    interp_memory[57] = 0xE0;
+    interp_memory[58] = 0x90;
+    interp_memory[59] = 0xE0;
+
+    /* "C" Hex */
+    interp_memory[60] = 0xF0;
+    interp_memory[61] = 0x80;
+    interp_memory[62] = 0x80;
+    interp_memory[63] = 0x80;
+    interp_memory[64] = 0xF0;
+
+    /* "D" Hex */
+    interp_memory[65] = 0xE0;
+    interp_memory[66] = 0x90;
+    interp_memory[67] = 0x90;
+    interp_memory[68] = 0x90;
+    interp_memory[69] = 0xE0;
+
+    /* "E" Hex */
+    interp_memory[70] = 0xF0;
+    interp_memory[71] = 0x80;
+    interp_memory[72] = 0xF0;
+    interp_memory[73] = 0x80;
+    interp_memory[74] = 0xF0;
+
+    /* "F" Hex */
+    interp_memory[75] = 0xF0;
+    interp_memory[76] = 0x80;
+    interp_memory[77] = 0xF0;
+    interp_memory[78] = 0x80;
+    interp_memory[79] = 0x80;
+
     return 0; 
 }
 
-int interp_step(void){
+int interp_step(void)
+{
+    interp_instruction instruction;
 
-    for(int i = 0; i < 16; i++){
-        interp_screen[i] = (action.interpreterInput >> i) & 1;
+    /* interp_decode(pc_register, &instruction); */
+
+    instruction.id = INTERP_DRW_VX_VY_NIBBLE;
+    instruction.x  = 0;
+    instruction.y  = 0;
+    instruction.n  = 5;
+    i_register     = 0x000;
+
+    switch(instruction.id){
+        case INTERP_CLS:
+
+        break;
+        case INTERP_RET:
+        
+        break;
+        case INTERP_SYS_ADDR:
+        
+        break;
+        case INTERP_JP_ADDR:
+        
+        break;
+        case INTERP_CALL_ADDR:
+
+        break;
+        case INTERP_SE_VX_BYTE:
+
+        break;
+        case INTERP_SNE_VX_BYTE:
+
+        break;
+        case INTERP_SE_VX_VY:
+
+        break;
+        case INTERP_LD_VX_BYTE:
+
+        break;
+        case INTERP_ADD_VX_BYTE:
+
+        break;
+        case INTERP_LD_VX_VY:
+
+        break;
+        case INTERP_OR_VX_VY:
+
+        break;
+        case INTERP_AND_VX_VY:
+
+        break;
+        case INTERP_XOR_VX_VY:
+
+        break;
+        case INTERP_ADD_VX_VY:
+
+        break;
+        case INTERP_SUB_VX_VY:
+
+        break;
+        case INTERP_SHR_VX_VY:
+
+        break;
+        case INTERP_SUBN_VX_VY:
+
+        break;
+        case INTERP_SHL_VX_VY:
+
+        break;
+        case INTERP_SNE_VX_VY:
+
+        break;
+        case INTERP_LD_I_ADDR:
+
+        break;
+        case INTERP_JP_V0_ADDR:
+
+        break;
+        case INTERP_RND_VX_BYTE:
+
+        break;
+        case INTERP_DRW_VX_VY_NIBBLE:
+            v_register[0xf] = 0;
+
+            for(int x = v_register[instruction.x]; x < v_register[instruction.x] + 8; x++){
+                for(int y = v_register[instruction.y]; y < v_register[instruction.y] + instruction.n; y++){
+                    int screenIndex = 64 * (y % 32) + (x % 64);
+                    int spriteBit = interp_memory[i_register + y] & (1 << (x - v_register[instruction.x]) );
+
+                    if(!v_register[0xf])
+                        v_register[0xf] = interp_screen[screenIndex] && spriteBit;
+                        
+                    interp_screen[screenIndex] = (interp_screen[screenIndex] > 0) ^ (spriteBit > 0);
+                }
+            }
+        break;
+        case INTERP_SKP_VX:
+
+        break;
+        case INTERP_SKNP_VX:
+
+        break;
+        case INTERP_LD_VX_DT:
+
+        break;
+        case INTERP_LD_VX_K:
+
+        break;
+        case INTERP_LD_DT_VX:
+
+        break;
+        case INTERP_LD_ST_VX:
+
+        break;
+        case INTERP_ADD_I_VX:
+
+        break;
+        case INTERP_LD_F_VX:
+
+        break;
+        case INTERP_LD_B_VX:
+
+        break;
+        case INTERP_LD_MEMINDEX_VX:
+
+        break;
+        case INTERP_LD_VX_MEMINDEX:
+
+        break;
+        case INTERP_INSTRUCTION_UNKNOWN:
+
+        break;
     }
-
-    draw(interp_screen);
 }
 
 /* The encoded intruction in _interp_memory_ at index _addr_ is stored in
