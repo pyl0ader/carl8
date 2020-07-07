@@ -148,6 +148,8 @@ int interp_loadRom(const char* rom)
  */
 int interp_initialize(void){
     memset(interp_memory, 0, INTERP_MEMORY_LEN);
+    memset(interp_screen, 0, SCREEN_LEN);
+    memset(v_register, 0, V_REGISTER_LEN);
 
     /* "0" Hex */
     interp_memory[0] = 0xF0;
@@ -268,80 +270,105 @@ int interp_step(void)
 {
     interp_instruction instruction;
 
-    /* interp_decode(pc_register, &instruction); */
-
-    instruction.id = INTERP_DRW_VX_VY_NIBBLE;
-    instruction.x  = 0;
-    instruction.y  = 0;
-    instruction.n  = 5;
-    i_register     = 0x000;
+    interp_decode(pc_register, &instruction);
 
     switch(instruction.id){
         case INTERP_CLS:
-
+            memset(interp_screen, 0, SCREEN_LEN);
+            clear();
+            pc_register += 2;
         break;
         case INTERP_RET:
-        
+            //pc_register = *--stackPointer
         break;
         case INTERP_SYS_ADDR:
         
         break;
         case INTERP_JP_ADDR:
-        
+            pc_register = instruction.nnn;
         break;
         case INTERP_CALL_ADDR:
-
+            //*stackPointer++ = pc_register;
+            pc_register = instruction.nnn;
         break;
         case INTERP_SE_VX_BYTE:
-
+            if(v_register[instruction.x] == instruction.kk)
+                pc_register += 4;
+            else
+                pc_register += 2;
         break;
         case INTERP_SNE_VX_BYTE:
-
+            if(v_register[instruction.x] != instruction.kk)
+                pc_register += 4;
+            else
+                pc_register += 2;
         break;
         case INTERP_SE_VX_VY:
-
+            if(v_register[instruction.x] == v_register[instruction.y])
+                pc_register += 4;
+            else
+                pc_register += 2;
         break;
         case INTERP_LD_VX_BYTE:
-
+            v_register[instruction.x] = instruction.kk;
+            pc_register += 2;
         break;
         case INTERP_ADD_VX_BYTE:
-
+            v_register[instruction.x] += instruction.kk;
+            pc_register += 2;
         break;
         case INTERP_LD_VX_VY:
-
+            v_register[instruction.x] = v_register[instruction.y];
+            pc_register += 2;
         break;
         case INTERP_OR_VX_VY:
-
+            v_register[instruction.x] |= v_register[instruction.y];
+            pc_register += 2;
         break;
         case INTERP_AND_VX_VY:
-
+            v_register[instruction.x] &= v_register[instruction.y];
+            pc_register += 2;
         break;
         case INTERP_XOR_VX_VY:
-
+            v_register[instruction.x] ^= v_register[instruction.y];
+            pc_register += 2;
         break;
         case INTERP_ADD_VX_VY:
-
+            v_register[instruction.x] += v_register[instruction.y];
+            pc_register += 2;
         break;
         case INTERP_SUB_VX_VY:
-
+            v_register[instruction.x] -= v_register[instruction.y];
+            v_register[0xf] = v_register[instruction.x] > v_register[instruction.y];
+            pc_register += 2;
         break;
         case INTERP_SHR_VX_VY:
-
+            v_register[instruction.x] >>= 1;
+            v_register[0xf] = v_register[instruction.x] & 1;
+            pc_register += 2;
         break;
         case INTERP_SUBN_VX_VY:
-
+            v_register[instruction.x] >>= 1;
+            v_register[0xf] = v_register[instruction.x] < v_register[instruction.y];
+            pc_register += 2;
         break;
         case INTERP_SHL_VX_VY:
-
+            v_register[instruction.x] <<= 1;
+            v_register[0xf] = v_register[instruction.x] & (1 << 7);
+            pc_register += 2;
         break;
         case INTERP_SNE_VX_VY:
-
+            if(v_register[instruction.x] != v_register[instruction.y])
+                pc_register += 4;
+            else
+                pc_register += 2;
         break;
         case INTERP_LD_I_ADDR:
-
+            i_register = instruction.nnn;
+            pc_register += 2;
         break;
         case INTERP_JP_V0_ADDR:
-
+            pc_register += v_register[0] + instruction.nnn;
         break;
         case INTERP_RND_VX_BYTE:
 
@@ -349,10 +376,10 @@ int interp_step(void)
         case INTERP_DRW_VX_VY_NIBBLE:
             v_register[0xf] = 0;
 
-            for(int x = v_register[instruction.x]; x < v_register[instruction.x] + 8; x++){
+            for(int x = v_register[instruction.x]; x < v_register[instruction.x] + 7; x++){
                 for(int y = v_register[instruction.y]; y < v_register[instruction.y] + instruction.n; y++){
                     int screenIndex = 64 * (y % 32) + (x % 64);
-                    int spriteBit = interp_memory[i_register + y] & (1 << (x - v_register[instruction.x]) );
+                    int spriteBit = interp_memory[i_register + (y - v_register[instruction.y])] & (1 << (7 - (x - v_register[instruction.x]) ) );
 
                     if(!v_register[0xf])
                         v_register[0xf] = interp_screen[screenIndex] && spriteBit;
@@ -360,6 +387,8 @@ int interp_step(void)
                     interp_screen[screenIndex] = (interp_screen[screenIndex] > 0) ^ (spriteBit > 0);
                 }
             }
+
+            draw(interp_screen);
         break;
         case INTERP_SKP_VX:
 
@@ -380,7 +409,8 @@ int interp_step(void)
 
         break;
         case INTERP_ADD_I_VX:
-
+            i_register += v_register[instruction.x];
+            pc_register += 2;
         break;
         case INTERP_LD_F_VX:
 
