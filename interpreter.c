@@ -26,6 +26,9 @@ enum instructionDataFlag {
 static uint8_t interp_memory[INTERP_MEMORY_LEN];
 static int programSize;
 
+static uint16_t stack[(INTERP_MEMORY_LEN - INTERP_PROGRAM_START) / 4]; 
+static uint16_t *stackPointer = stack - 1;
+
 static uint8_t v_register[V_REGISTER_LEN];
 static uint16_t i_register = 0;
 static uint16_t pc_register = INTERP_PROGRAM_START;
@@ -279,7 +282,7 @@ int interp_step(void)
             pc_register += 2;
         break;
         case INTERP_RET:
-            //pc_register = *--stackPointer
+            pc_register = *--stackPointer;
         break;
         case INTERP_SYS_ADDR:
         
@@ -288,7 +291,7 @@ int interp_step(void)
             pc_register = instruction.nnn;
         break;
         case INTERP_CALL_ADDR:
-            //*stackPointer++ = pc_register;
+            *stackPointer++ = pc_register;
             pc_register = instruction.nnn;
         break;
         case INTERP_SE_VX_BYTE:
@@ -389,6 +392,7 @@ int interp_step(void)
             }
 
             draw(interp_screen);
+            pc_register += 2;
         break;
         case INTERP_SKP_VX:
 
@@ -413,7 +417,8 @@ int interp_step(void)
             pc_register += 2;
         break;
         case INTERP_LD_F_VX:
-
+            i_register = 5 * (v_register[instruction.x] & 0xf);
+            pc_register += 2;
         break;
         case INTERP_LD_B_VX:
 
