@@ -3,6 +3,8 @@
 #include <ctype.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
+#include <sys/times.h>
 
 #include "logError.h"
 #include "interpreter.h"
@@ -13,6 +15,7 @@
 #define V_REGISTER_LEN 16
 #define SCREEN_LEN 64 * 32
 #define STRING_SIZE 80
+#define HZ sysconf(_SC_CLK_TCK)
 
 enum instructionDataFlag {
     INSTRUCTIONDATA_ADDR    = 1,
@@ -32,6 +35,8 @@ static uint16_t *stackPointer = stack - 1;
 static uint8_t v_register[V_REGISTER_LEN];
 static uint16_t i_register = 0;
 static uint16_t pc_register = INTERP_PROGRAM_START;
+
+static long hz;
 
 static uint8_t interp_screen[SCREEN_LEN];
 
@@ -138,7 +143,7 @@ int interp_loadRom(const char* rom)
     }
 
     while(!interp_memory[INTERP_PROGRAM_START + programSize - 1]){
-        if(!--programSize){
+        if(--programSize <= 0){
             setError("rom file is blank; not a valid program");
             return -1;
         }
@@ -153,6 +158,8 @@ int interp_initialize(void){
     memset(interp_memory, 0, INTERP_MEMORY_LEN);
     memset(interp_screen, 0, SCREEN_LEN);
     memset(v_register, 0, V_REGISTER_LEN);
+
+    hz = sysconf(_SC_CLK_TCK) / 60;
 
     /* "0" Hex */
     interp_memory[0] = 0xF0;
@@ -274,6 +281,12 @@ int interp_step(void)
     interp_instruction instruction;
 
     interp_decode(pc_register, &instruction);
+
+    static long lastTimeValue    = 0;
+    static long currentTimeValue = 0;
+    struct tms tms;
+
+    currentTimeValue = times(&tms);
 
     switch(instruction.id){
         case INTERP_CLS:
