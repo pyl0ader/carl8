@@ -15,82 +15,82 @@ void die(void);
 
 int main(int argc, char** argv)
 {
-    FILE *load;
+	FILE *load;
 
-    if(argc != 2 && argc != 3){
-        setError(USAGE);
-        presentErrorLog();
-        die();
-    } 
+	if(argc != 2 && argc != 3){
+		setError(USAGE);
+		presentErrorLog();
+		die();
+	} 
 
-    interp_initialize();
+	interp_initialize();
 
-    if(argc == 3 && strcmp(argv[1], "-d") == 0 ){
-        if( interp_loadRom(argv[2]) < 0 ){
-            setError("could not load \"%s\": %s", argv[2], getError());
-            presentErrorLog();
-            die();
-        }
-        if( assm_disassemble() < 0 ){
-            setError("could not disassemble \"%s\": %s", argv[2], getError());
-            presentErrorLog();
-            die();
-        }
-        
-    }
-    else if (argc == 3 && strcmp(argv[1], "-a") == 0 ){
-        if( assm_assemble(argv[2]) < 0 ){
-            setError("could not assemble \"%s\": %s", argv[2], getError());
-            presentErrorLog();
-            die();
-        }
-    }
-    else if (argc == 3 && strcmp(argv[1], "-r") == 0){
-        if( assm_assemble(argv[2]) < 0 ){
-            setError("could not assemble \"%s\": %s", argv[2], getError());
-            presentErrorLog();
-            die();
-        }
-        if( assm_disassemble() < 0 ){
-            setError("could not re-disassemble \"%s\": %s", argv[2], getError());
-            presentErrorLog();
-            die();
-        }
-    }
-    else if (argc == 2){
+	if(argc == 3 && strcmp(argv[1], "-d") == 0 ){
+		if( interp_loadRom(argv[2]) < 0 ){
+			setError("could not load \"%s\": %s", argv[2], getError());
+			presentErrorLog();
+			die();
+		}
+		if( assm_disassemble() < 0 ){
+			setError("could not disassemble \"%s\": %s", argv[2], getError());
+			presentErrorLog();
+			die();
+		}
+		
+	}
+	else if (argc == 3 && strcmp(argv[1], "-a") == 0 ){
+		if( assm_assemble(argv[2]) < 0 ){
+			setError("could not assemble \"%s\": %s", argv[2], getError());
+			presentErrorLog();
+			die();
+		}
+	}
+	else if (argc == 3 && strcmp(argv[1], "-r") == 0){
+		if( assm_assemble(argv[2]) < 0 ){
+			setError("could not assemble \"%s\": %s", argv[2], getError());
+			presentErrorLog();
+			die();
+		}
+		if( assm_disassemble() < 0 ){
+			setError("could not re-disassemble \"%s\": %s", argv[2], getError());
+			presentErrorLog();
+			die();
+		}
+	}
+	else if (argc == 2){
 
-        if(interp_loadRom(argv[1]) < 0){
-            setError("could not load %s: %s",
-                    argv[1],
-                    getError() );
-        }
-        
-    }
-    if(argc == 2 || (argc == 3 && strcmp(argv[1], "-a") == 0) ){
+		if(interp_loadRom(argv[1]) < 0){
+			setError("could not load %s: %s",
+					argv[1],
+					getError() );
+		}
+		
+	}
+	if(argc == 2 || (argc == 3 && strcmp(argv[1], "-a") == 0) ){
 
-        if(initializeVideo(TITLE) < 0){
-            setError("initializeVideo: %s", getError());
-            presentErrorLog();
-            die();
-        }
+		if(initializeVideo(TITLE) < 0){
+			setError("initializeVideo: %s", getError());
+			presentErrorLog();
+			die();
+		}
 
-        initializeInput();
+		initializeInput();
 
-        while(!action.quit){
-            inputProcess();
+		while(!action.quit){
+			inputProcess();
 
-            if(interp_step() < 0){
-                setError("interpreter failure: %s", getError() );
-                die();
-            }
-        }
+			if(interp_step() < 0){
+				setError("interpreter failure: %s", getError() );
+				die();
+			}
+		}
 
-        closeVideo();
-    }
+		closeVideo();
+	}
 }
 
 void die(void)
 {
-    closeVideo();
-    exit(1);
+	closeVideo();
+	exit(1);
 }

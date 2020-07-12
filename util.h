@@ -8,8 +8,8 @@ typedef struct util_pair** util_dictionary;
 typedef struct util_linkedList util_linkedList;
 
 struct util_linkedList {
-    int val;
-    util_linkedList* next;
+	int val;
+	util_linkedList* next;
 };
 
 /* A _util_dictionary_ is created where keys may be mapped to values.
