@@ -2,20 +2,22 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
+#include <math.h>
 #include <errno.h>
-#include <unistd.h>
-#include <sys/times.h>
 
 #include "logError.h"
 #include "interpreter.h"
 #include "input.h"
 #include "video.h"
 
-#define WORD(ADDR) ( interp_memory[ADDR] << 8 | interp_memory[(ADDR)+1] )
+#include <unistd.h>
+
+#define FETCH(ADDR) ( interp_memory[ADDR] << 8 | interp_memory[(ADDR)+1] )
+#define CLOCKRATE ( (float)1 / 60 )
 #define V_REGISTER_LEN 16
 #define SCREEN_LEN 64 * 32
 #define STRING_SIZE 80
-#define HZ sysconf(_SC_CLK_TCK)
+#define SECOND 1000000000
 
 enum instructionDataFlag {
 	INSTRUCTIONDATA_ADDR	= 1,
@@ -35,8 +37,8 @@ static uint16_t *stackPointer = stack - 1;
 static uint8_t v_register[V_REGISTER_LEN];
 static uint16_t i_register = 0;
 static uint16_t pc_register = INTERP_PROGRAM_START;
-
-static long hz;
+uint8_t dt_register = 0;
+uint8_t st_register = 0;
 
 static uint8_t interp_screen[SCREEN_LEN];
 
@@ -159,8 +161,6 @@ int interp_initialize(void){
 	memset(interp_screen, 0, SCREEN_LEN);
 	memset(v_register, 0, V_REGISTER_LEN);
 
-	hz = sysconf(_SC_CLK_TCK) / 60;
-
 	/* "0" Hex */
 	interp_memory[0] = 0xF0;
 	interp_memory[1] = 0x90;
@@ -276,17 +276,28 @@ int interp_initialize(void){
 	return 0; 
 }
 
-int interp_step(void)
+int interp_step(long delta)
 {
+
+	static long elapsed = 0;
+
+	elapsed += delta;
+
+	if(elapsed >= SECOND * CLOCKRATE){
+
+		int decrement = elapsed / (SECOND * CLOCKRATE);
+
+		elapsed = 0;
+
+		if(dt_register)
+			dt_register -= dt_register - decrement < 0 ? dt_register : decrement;
+		if(st_register)
+			st_register -= st_register - decrement < 0 ? st_register : decrement;
+	}
+
 	interp_instruction instruction;
 
 	interp_decode(pc_register, &instruction);
-
-	static long lastTimeValue	= 0;
-	static long currentTimeValue = 0;
-	struct tms tms;
-
-	currentTimeValue = times(&tms);
 
 	switch(instruction.id){
 		case INTERP_CLS:
@@ -304,7 +315,7 @@ int interp_step(void)
 			pc_register = instruction.nnn;
 		break;
 		case INTERP_CALL_ADDR:
-			*stackPointer++ = pc_register;
+			*stackPointer++ = pc_register + 2;
 			pc_register = instruction.nnn;
 		break;
 		case INTERP_SE_VX_BYTE:
@@ -414,13 +425,15 @@ int interp_step(void)
 
 		break;
 		case INTERP_LD_VX_DT:
-
+			v_register[instruction.x] = dt_register;
+			pc_register += 2;
 		break;
 		case INTERP_LD_VX_K:
-
+			
 		break;
 		case INTERP_LD_DT_VX:
-
+			dt_register = v_register[instruction.x];
+			pc_register += 2;
 		break;
 		case INTERP_LD_ST_VX:
 
@@ -454,7 +467,7 @@ int interp_step(void)
  */
 int interp_decode(uint16_t addr, interp_instruction *ins)
 {
-	uint16_t word = WORD(addr);
+	uint16_t word = FETCH(addr);
 	uint8_t topNibble = word >> 12;
 
 	enum interp_instructionId id = INTERP_INSTRUCTION_UNKNOWN;
@@ -547,20 +560,21 @@ int interp_decode(uint16_t addr, interp_instruction *ins)
 	ins->id = id;
 
 	if(instructionDataMask[id] & INSTRUCTIONDATA_ADDR)
-		ins->nnn = WORD(addr) & 0xfff;
+		ins->nnn = word & 0xfff;
 	if(instructionDataMask[id] & INSTRUCTIONDATA_BYTE)
-		ins->kk = WORD(addr) & 0xff;
+		ins->kk = word & 0xff;
 	if(instructionDataMask[id] & INSTRUCTIONDATA_VX)
-		ins->x = (WORD(addr) & 0xf00) >> 8;
+		ins->x = (word & 0xf00) >> 8;
 	if(instructionDataMask[id] & INSTRUCTIONDATA_VY)
-		ins->y = (WORD(addr) & 0xf0) >> 4;
+		ins->y = (word & 0xf0) >> 4;
 	if(instructionDataMask[id] & INSTRUCTIONDATA_NIBBLE)
-		ins->n = WORD(addr) & 0xf;
+		ins->n = word & 0xf;
 
 	return 0;
 }
 
-int interp_encode(uint16_t addr, interp_instruction ins){
+int interp_encode(uint16_t addr, interp_instruction ins)
+{
 	uint16_t word = 0;
 
 	if(ins.id == INTERP_INSTRUCTION_UNKNOWN) {
