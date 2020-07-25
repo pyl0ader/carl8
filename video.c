@@ -40,11 +40,22 @@ int initializeVideo(const char* name)
 	return 0;
 }
 
+/* _renderer_ and _window_ are destroyed. SDL is closed.
+ * Errors are ignored. */
+void closeVideo(void)
+{
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
+	SDL_Quit();
+}
+
+static uint8_t cleared = 0;
+
 /* For every nonzero element of _back_, using _renderer_, a white filled Rectangle 
  * is rendered at that element's index in a 64 x 32 representation of _back_. 
  * Rectangles are stretched/scaled with respect to the dimensions of _window_.
  * Return value is -1 if errors occur, otherwise it is 0. */
-extern int draw(uint8_t back[64 * 32])
+extern int draw(const uint8_t back[64 * 32])
 {
 	int x, y, i;
 	SDL_Rect pixel;
@@ -60,12 +71,12 @@ extern int draw(uint8_t back[64 * 32])
 		for(x = 0; x < 64; x++)
 		{
 			int coordinates = y * 64 + x;
-			if(back[coordinates] ^ front[coordinates])
+			if((back[coordinates] ^ front[coordinates]) || (cleared && back[coordinates]) )
 			{
 				if(!changed)
 					changed = 1;
 
-				if(back[coordinates] && !front[coordinates]) { /* draw */
+				if( (back[coordinates] && !front[coordinates]) || (cleared && back[coordinates]) ) { /* draw */
 					if(SDL_SetRenderDrawColor(renderer, 0xff, 0xff, 0xff, SDL_ALPHA_OPAQUE) < 0){
 						setError("SDL_SetRenderDrawColor: %s", SDL_GetError());
 						return -1;
@@ -89,6 +100,8 @@ extern int draw(uint8_t back[64 * 32])
 		}
 	}
 
+	if(cleared) cleared = 0;
+
 	if(changed) SDL_RenderPresent(renderer);
 	return 0;
 }
@@ -106,14 +119,6 @@ int clear(void)
 		setError("SDL_RenderClear: %s", SDL_GetError());
 		return -1;
 	}
-	return 0;
-}
 
-/* _renderer_ and _window_ are destroyed. SDL is closed.
- * Errors are ignored. */
-void closeVideo(void)
-{
-	SDL_DestroyRenderer(renderer);
-	SDL_DestroyWindow(window);
-	SDL_Quit();
+	return 0;
 }
