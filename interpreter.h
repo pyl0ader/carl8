@@ -8,7 +8,7 @@
 /* function declarations */
 extern int interp_initialize(void);
 extern int interp_loadRom(const char* rom);
-extern int interp_step(void);
+extern int interp_step(long delta);
 
 enum interp_instructionId {
 	INTERP_CLS,
