@@ -12,6 +12,9 @@ void die(void);
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
+
+#define CARL8R8 (1 / 60)
 
 int main(int argc, char** argv)
 {
@@ -76,15 +79,36 @@ int main(int argc, char** argv)
 
 		initializeInput();
 
+		struct timespec lastTime  = {0, 0};
+		struct timespec deltaTime = {0, 0};
+
 		while(!action.quit){
+
 			inputProcess();
 
-			if(interp_step() < 0){
+			clock_gettime(CLOCK_MONOTONIC, &deltaTime);
+			
+			if( !(lastTime.tv_sec || lastTime.tv_nsec) ) {
+				lastTime  = deltaTime;
+				deltaTime.tv_sec = deltaTime.tv_nsec = 0;
+			}
+			else {
+				deltaTime.tv_sec  -= lastTime.tv_sec;
+				deltaTime.tv_nsec -= lastTime.tv_nsec;
+
+				lastTime.tv_sec  += deltaTime.tv_sec;
+				lastTime.tv_nsec += deltaTime.tv_nsec;
+
+				/* carry over seconds as interpreter only measures nanos */
+				deltaTime.tv_nsec += 1000000000 * deltaTime.tv_sec;
+			}
+
+			if(interp_step(deltaTime.tv_nsec) < 0){
 				setError("interpreter failure: %s", getError() );
 				die();
 			}
+			
 		}
-
 		closeVideo();
 	}
 }
