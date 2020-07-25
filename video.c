@@ -120,5 +120,7 @@ int clear(void)
 		return -1;
 	}
 
+	cleared = 1;
+
 	return 0;
 }
