@@ -10,8 +10,6 @@
 #include "input.h"
 #include "video.h"
 
-#include <unistd.h>
-
 #define FETCH(ADDR) ( interp_memory[ADDR] << 8 | interp_memory[(ADDR)+1] )
 #define CLOCKRATE ( (float)1 / 60 )
 #define V_REGISTER_LEN 16
@@ -281,6 +279,8 @@ int interp_step(long delta)
 
 	static long elapsed = 0;
 
+	char incomplete = 0;
+
 	elapsed += delta;
 
 	if(elapsed >= SECOND * CLOCKRATE){
@@ -309,7 +309,7 @@ int interp_step(long delta)
 			pc_register = *--stackPointer;
 		break;
 		case INTERP_SYS_ADDR:
-		
+incomplete = 1;
 		break;
 		case INTERP_JP_ADDR:
 			pc_register = instruction.nnn;
@@ -398,12 +398,12 @@ int interp_step(long delta)
 			pc_register += v_register[0] + instruction.nnn;
 		break;
 		case INTERP_RND_VX_BYTE:
-
+incomplete = 1;
 		break;
 		case INTERP_DRW_VX_VY_NIBBLE:
 			v_register[0xf] = 0;
 
-			for(int x = v_register[instruction.x]; x < v_register[instruction.x] + 7; x++){
+			for(int x = v_register[instruction.x]; x < v_register[instruction.x] + 8; x++){
 				for(int y = v_register[instruction.y]; y < v_register[instruction.y] + instruction.n; y++){
 					int screenIndex = 64 * (y % 32) + (x % 64);
 					int spriteBit = interp_memory[i_register + (y - v_register[instruction.y])] & (1 << (7 - (x - v_register[instruction.x]) ) );
@@ -419,24 +419,30 @@ int interp_step(long delta)
 			pc_register += 2;
 		break;
 		case INTERP_SKP_VX:
-
+			if( action.interpreterInput & (1 << (v_register[instruction.x] & 0xf)) ) 
+				pc_register += 4;
+			else
+				pc_register += 2;
 		break;
 		case INTERP_SKNP_VX:
-
+			if( action.interpreterInput & (1 << (v_register[instruction.x] & 0xf)) ) 
+				pc_register += 2;
+			else
+				pc_register += 4;
 		break;
 		case INTERP_LD_VX_DT:
 			v_register[instruction.x] = dt_register;
 			pc_register += 2;
 		break;
 		case INTERP_LD_VX_K:
-			
+incomplete = 1;
 		break;
 		case INTERP_LD_DT_VX:
 			dt_register = v_register[instruction.x];
 			pc_register += 2;
 		break;
 		case INTERP_LD_ST_VX:
-
+incomplete = 1;
 		break;
 		case INTERP_ADD_I_VX:
 			i_register += v_register[instruction.x];
@@ -447,18 +453,34 @@ int interp_step(long delta)
 			pc_register += 2;
 		break;
 		case INTERP_LD_B_VX:
-
+incomplete = 1;
 		break;
 		case INTERP_LD_MEMINDEX_VX:
-
+			/*
+			for(int i = 0; i <= v_register[instruction.x]; i++){
+				interp_writeMemory(i_register, v_register[instruction.x]);
+			} 
+			*/
+			pc_register += 2;
 		break;
 		case INTERP_LD_VX_MEMINDEX:
-
+			/*
+			for(int i = 0; i <= v_register[instruction.x]; i++){
+				v_register[instruction.x + i] = interp_readMemory(i_register);
+			}
+			*/
+			pc_register += 2;
 		break;
 		case INTERP_INSTRUCTION_UNKNOWN:
-
+incomplete = 1;
 		break;
 	}
+	if(incomplete){
+		pc_register += 2;
+		incomplete = 0;
+	}
+	//printf("%3X\n", pc_register);
+	//fflush(stdout);
 }
 
 /* The encoded intruction in _interp_memory_ at index _addr_ is stored in
