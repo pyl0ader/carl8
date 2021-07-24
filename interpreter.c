@@ -4,11 +4,13 @@
 #include <string.h>
 #include <math.h>
 #include <errno.h>
+#include <time.h>
 
 #include "logError.h"
 #include "interpreter.h"
 #include "input.h"
 #include "video.h"
+#include "beep.h"
 
 #define FETCH(ADDR) ( interp_memory[ADDR] << 8 | interp_memory[(ADDR)+1] )
 #define CLOCKRATE ( (float)1 / 60 )
@@ -16,6 +18,7 @@
 #define SCREEN_LEN 64 * 32
 #define STRING_SIZE 80
 #define SECOND 1000000000
+#define SPEED 1200
 
 enum instructionDataFlag {
 	INSTRUCTIONDATA_ADDR	= 1,
@@ -274,19 +277,26 @@ int interp_initialize(void){
 	return 0; 
 }
 
+uint8_t beep = 0;
+
 int interp_step(long delta)
 {
 
+	struct timespec req = {0, 0};
+	struct timespec rem = {0, 0};
 	static long elapsed = 0;
 
-	char incomplete = 0;
+    // for incomplete instructions
+	uint8_t incomplete  = 0;
 
+	// sleep to control speed of execution
+	req.tv_nsec = SECOND / SPEED;
+	nanosleep(&req, &rem); 
+
+	// timers
 	elapsed += delta;
-
 	if(elapsed >= SECOND * CLOCKRATE){
-
 		int decrement = elapsed / (SECOND * CLOCKRATE);
-
 		elapsed = 0;
 
 		if(dt_register)
@@ -294,11 +304,19 @@ int interp_step(long delta)
 		if(st_register)
 			st_register -= st_register - decrement < 0 ? st_register : decrement;
 	}
+	if(st_register && !beep){
+		beep = 1;
+		beepStart();
+	}
+	else if (!st_register && beep){
+		beep = 0;
+		beepStop();
+	}
 
 	interp_instruction instruction;
 
+	// execution
 	interp_decode(pc_register, &instruction);
-
 	switch(instruction.id){
 		case INTERP_CLS:
 			memset(interp_screen, 0, SCREEN_LEN);
@@ -309,7 +327,8 @@ int interp_step(long delta)
 			pc_register = *--stackPointer;
 		break;
 		case INTERP_SYS_ADDR:
-incomplete = 1;
+			pc_register += 2;
+		    // ignored
 		break;
 		case INTERP_JP_ADDR:
 			pc_register = instruction.nnn;
@@ -406,11 +425,15 @@ incomplete = 1;
 			for(int x = v_register[instruction.x]; x < v_register[instruction.x] + 8; x++){
 				for(int y = v_register[instruction.y]; y < v_register[instruction.y] + instruction.n; y++){
 					int screenIndex = 64 * (y % 32) + (x % 64);
+					/*
+					Everyone knows that debugging is twice as hard as writing a program in the first place. 
+					So if you're as clever as you can be when you write it, how will you ever debug it?
+						- Brian Kernigahn */
 					int spriteBit = interp_memory[i_register + (y - v_register[instruction.y])] & (1 << (7 - (x - v_register[instruction.x]) ) );
 
 					if(!v_register[0xf])
 						v_register[0xf] = interp_screen[screenIndex] && spriteBit;
-						
+
 					interp_screen[screenIndex] = (interp_screen[screenIndex] > 0) ^ (spriteBit > 0);
 				}
 			}
@@ -435,14 +458,20 @@ incomplete = 1;
 			pc_register += 2;
 		break;
 		case INTERP_LD_VX_K:
-incomplete = 1;
+			if(action.interpreterInput){
+				int key;
+				for(key = 0; key < 16 || (action.interpreterInput & (1 << key)); key++);
+				v_register[instruction.x] = key;
+				pc_register += 2;
+			}
 		break;
 		case INTERP_LD_DT_VX:
 			dt_register = v_register[instruction.x];
 			pc_register += 2;
 		break;
 		case INTERP_LD_ST_VX:
-incomplete = 1;
+			st_register = v_register[instruction.x];
+			pc_register += 2;
 		break;
 		case INTERP_ADD_I_VX:
 			i_register += v_register[instruction.x];
@@ -456,31 +485,26 @@ incomplete = 1;
 incomplete = 1;
 		break;
 		case INTERP_LD_MEMINDEX_VX:
-			/*
 			for(int i = 0; i <= v_register[instruction.x]; i++){
 				interp_writeMemory(i_register, v_register[instruction.x]);
 			} 
-			*/
 			pc_register += 2;
 		break;
 		case INTERP_LD_VX_MEMINDEX:
-			/*
-			for(int i = 0; i <= v_register[instruction.x]; i++){
-				v_register[instruction.x + i] = interp_readMemory(i_register);
+			for(int i = 0; i < (v_register[instruction.x] & 0xf); i++){
+				v_register[instruction.x + i] = interp_readMemory(i_register + i);
 			}
-			*/
 			pc_register += 2;
 		break;
 		case INTERP_INSTRUCTION_UNKNOWN:
-incomplete = 1;
+			setError("Possibly corrupt program");
+			return -1;
 		break;
 	}
 	if(incomplete){
 		pc_register += 2;
 		incomplete = 0;
 	}
-	//printf("%3X\n", pc_register);
-	//fflush(stdout);
 }
 
 /* The encoded intruction in _interp_memory_ at index _addr_ is stored in

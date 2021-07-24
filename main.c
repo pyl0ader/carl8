@@ -1,20 +1,24 @@
-#include "video.h"
-#include "input.h"
 #include "interpreter.h"
+#include "input.h"
+#include "video.h"
+#include "beep.h"
 #include "assembly.h"
 #include "logError.h"
 
-#define TITLE "carl8"
-#define USAGE "usage: carl8 [-d] ROM"
-
-void die(void);
-
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 
 #define CARL8R8 (1 / 60)
+#define TITLE "carl8"
+#define USAGE "usage: carl8 [-d] ROM"
+
+void die(void);
 
 int main(int argc, char** argv)
 {
@@ -77,10 +81,18 @@ int main(int argc, char** argv)
 			die();
 		}
 
+		if(initAudio() < 0){
+			setError("initializeVideo: %s", getError());
+			presentErrorLog();
+			die();
+		}
+
 		initializeInput();
 
 		struct timespec lastTime  = {0, 0};
 		struct timespec deltaTime = {0, 0};
+
+		int w = 0;
 
 		while(!action.quit){
 
@@ -107,9 +119,9 @@ int main(int argc, char** argv)
 				setError("interpreter failure: %s", getError() );
 				die();
 			}
-			
 		}
 		closeVideo();
+        closeAudio();
 	}
 }
 
