@@ -21,6 +21,8 @@
 #define SET_LABEL(ADDR) (addrFlags[(ADDR) >> 2] |= 1 << ((ADDR) & 3) * 2 + 1)
 #define IS_LABEL(ADDR)  (addrFlags[(ADDR) >> 2] & (1 << ((ADDR) & 3) * 2 + 1)  )
 
+/* The parameter set.
+ * (I should probably call these "operands" instead.) */
 enum parameter {
 	PARAMETER_NONE = -7,
 	PARAMETER_ADDR,
@@ -39,6 +41,8 @@ enum parameter {
 	PARAMETER_UNKNOWN
 };
 
+/* The operation set. 
+ * (I should probably call these mnemonics also. That's the typical assembly nomenclature.) */
 enum operation {
 	OPERATION_CLS,
 	OPERATION_RET,
@@ -63,6 +67,7 @@ enum operation {
 	OPERATION_UNKNOWN
 };
 
+/* The textual Symbols for operations. */
 static const char operationSymbols[][TOKEN_SIZE] = {
 	"CLS",
 	"RET",
@@ -86,8 +91,11 @@ static const char operationSymbols[][TOKEN_SIZE] = {
 	"SKNP"
 };
 
+/* Some of the textual Symbols for parameters. */
 static const char parameterSymbols[][TOKEN_SIZE] = {
 	"V0",
+    /* I need to know if a parameter is "V0" specifically as it indentifies 
+     * the jump operation where any other register address is illegal. */
 	"DT",
 	"ST",
 	"I",
@@ -221,7 +229,7 @@ int assm_disassemble(void)
 
 	addr = INTERP_PROGRAM_START;
 
-	/* Encoded instructions are translated to symbolic instructions,
+	/* Encoded instructions are translated to assembly statements,
 	 * and sprite data to data directives. Then they are printed to 
 	 * _stdout_.
 	 */
@@ -246,17 +254,17 @@ int assm_disassemble(void)
 			{
 				switch(*i){
 					case PARAMETER_ADDR:
-						/* if the address parameter is not inside the program, or
+						/* if the memory address parameter is not inside the program, or
 						 * for some god known reason in the middle of an instruction
-						 * then that address can not be labeled and the parameter will be an 
-						 * address literal
+						 * then that address can not be labeled and the parameter will be a
+						 * memory address literal.
 						 */
 						if( !(instruction.nnn % 2 == 1 && IS_LOGIC(instruction.nnn - 1)) 
 							&& (instruction.nnn >= INTERP_PROGRAM_START && instruction.nnn < ( INTERP_PROGRAM_START + programSize) ) 
 						  )
-							snprintf(token, TOKEN_SIZE, "L%03X" /* a labeled address */, instruction.nnn);
+							snprintf(token, TOKEN_SIZE, "L%03X" /* a labeled memory address */, instruction.nnn);
 						else 
-							snprintf(token, TOKEN_SIZE, "#%03X" /* an address literal */, instruction.nnn);
+							snprintf(token, TOKEN_SIZE, "#%03X" /* a memory address literal */, instruction.nnn);
 						break;
 					case PARAMETER_BYTE:
 						snprintf(token, TOKEN_SIZE, "#%02X", instruction.kk);
@@ -278,7 +286,7 @@ int assm_disassemble(void)
 				strncat(arguments, token, STRING_SIZE - 1);
 
 				if(*++i != PARAMETER_NONE)
-				{   //Space if more argument tokens follow
+				{   // Space if more argument tokens follow
 					strncat(arguments, " ", STRING_SIZE - 1);
 				}
 
@@ -337,6 +345,8 @@ int assm_disassemble(void)
 typedef char* token_t;
 typedef token_t* statement_t;
 
+/* I don't even need these two macros, nor do i need to allocate memory.
+ * not sure what I was thinking. */
 #define TOKEN_INIT (memset(calloc(sizeof(char), TOKEN_SIZE), '\0', sizeof(char)))
 #define STATEMENT_INIT(N) (memset(calloc(sizeof(char*), N), 0, sizeof(char*) * N))
 
@@ -344,6 +354,10 @@ typedef token_t* statement_t;
 #define ISWHITESPACE(C) ((C) == ' ' || (C) == '\t' || (C) == '\n')
 
 #define PARAMETER_XY PARAMETER_VX
+
+/* really need to change the names of these macros 
+ * something like BIT_SQUISH would be funny and also make
+ * more sense. */
 #define ARG_1(N) ( (N + 7) )
 #define ARG_2(N) ( (N + 7) << 4 )
 #define ARG_3(N) ( (N + 7) << 8 )
@@ -529,6 +543,7 @@ int assm_assemble(const char* fileName)
 				PARAMETER_NONE, PARAMETER_NONE, PARAMETER_NONE
 			};
 
+            /* The operation token is compared with each symbol in the operation set. */
 			for(op = OPERATION_CLS; 
 					op < OPERATION_UNKNOWN && strcmp(statement[statementIndex], operationSymbols[op]) != 0; 
 					op++);
@@ -539,11 +554,22 @@ int assm_assemble(const char* fileName)
 				return -1;
 			}
 
+            /* a much more intuitive way of handling that jump operation than the autism I'm doing now
+            if( op == OPERATION_JP && strcmp(statement[++statementIndex], "V0") ){
+                op = OPERATION_JP_V0 (you would add this to the enum,
+                                        because if i understand correctly it's considered an "extended mnemonic")
+            }
+            */
+                
+
+            /* For each parameter token, */
 			++statementIndex;
 			for(uint8_t parameterIndex = 0; 
 					parameterIndex < 3 && *statement[statementIndex] != '\0'; 
 					++statementIndex, ++parameterIndex){
 
+                /* that parameter token is compared with some of the 
+                 * symbols that are invariable. */
 				for(
 				parameterTokens[parameterIndex] = PARAMETER_V0; 
 				parameterTokens[parameterIndex] < PARAMETER_UNKNOWN 
@@ -554,8 +580,13 @@ int assm_assemble(const char* fileName)
 				if(parameterTokens[parameterIndex] == PARAMETER_V0)
 					isy++;
 
+                /* If the parameter is not one those symbols
+                 * then it's variable; which is to say it could be one of 
+                 * a memory address label, memory address literal, byte literal, 
+                 * register address literal, or nibble literal. */
 				if(parameterTokens[parameterIndex] == PARAMETER_UNKNOWN)
 				{
+                    // label
 					if( isLabelSym(statement[statementIndex]) ){
 						int val;
 
@@ -575,14 +606,17 @@ int assm_assemble(const char* fileName)
 								line);
 						}
 					}
+                    // memory address literal
 					else if( isAddressLiteral(statement[statementIndex]) ){
 						parameterTokens[parameterIndex] = PARAMETER_ADDR;
 						instruction.nnn = (int)strtol(&statement[statementIndex][1], (char**)NULL, 16);
 					}
+                    // byte literal
 					else if( isByteSym(statement[statementIndex]) ){
 						parameterTokens[parameterIndex] = PARAMETER_BYTE;
 						instruction.kk = (int)strtol(&statement[statementIndex][1], (char**)NULL, 16);
 					}
+                    // register address literal
 					else if( isxySym(statement[statementIndex])){
 						parameterTokens[parameterIndex] = PARAMETER_XY;
 						if(isy++)
@@ -590,6 +624,7 @@ int assm_assemble(const char* fileName)
 						else
 							instruction.x = (int)strtol(&statement[statementIndex][1], (char**)NULL, 16);
 					}
+                    // nibble literal
 					else if( isNibbleSym(statement[statementIndex]) ){
 						parameterTokens[parameterIndex] = PARAMETER_NIBBLE;
 						instruction.n = (int)strtol(&statement[statementIndex][1], (char**)NULL, 16);
@@ -602,6 +637,7 @@ int assm_assemble(const char* fileName)
 							statement[statementIndex]);
 			}
 
+            // and this is absolutely garbage!
 			++statementIndex;
 			switch(ARG_1(parameterTokens[0]) | ARG_2(parameterTokens[1]) | ARG_3(parameterTokens[2]))
 			{
