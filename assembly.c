@@ -9,7 +9,7 @@
 #include "interpreter.h"
 
 #define STRING_SIZE 80
-#define TOKEN_SIZE 5
+#define TOKEN_SIZE 6
 #define BRANCHES_MAX ( (INTERP_MEMORY_LEN - INTERP_PROGRAM_START) / 2 )
 #define ADDR_FLAGS_LEN (INTERP_MEMORY_LEN / 4)
 
@@ -21,59 +21,58 @@
 #define SET_LABEL(ADDR) (addrFlags[(ADDR) >> 2] |= 1 << ((ADDR) & 3) * 2 + 1)
 #define IS_LABEL(ADDR)  (addrFlags[(ADDR) >> 2] & (1 << ((ADDR) & 3) * 2 + 1)  )
 
-/* The parameter set.
- * (I should probably call these "operands" instead.) */
-enum parameter {
-	PARAMETER_NONE = -7,
-	PARAMETER_ADDR,
-	PARAMETER_BYTE,
-	PARAMETER_VX,
-	PARAMETER_VY,
-	PARAMETER_NIBBLE,
-	PARAMETER_V0 = 0,
-	PARAMETER_DT,
-	PARAMETER_ST,
-	PARAMETER_I,
-	PARAMETER_K,
-	PARAMETER_F,
-	PARAMETER_B,
-	PARAMETER_MEMINDEX,
-	PARAMETER_UNKNOWN
+/* The operand set. */
+enum operand {
+	OPERAND_NONE = -6,
+	OPERAND_ADDR,
+	OPERAND_BYTE,
+	OPERAND_VX,
+	OPERAND_VY,
+	OPERAND_NIBBLE,
+	OPERAND_DT = 0,
+	OPERAND_ST,
+	OPERAND_I,
+	OPERAND_K,
+	OPERAND_F,
+	OPERAND_B,
+	OPERAND_MEMINDEX,
+	OPERAND_UNKNOWN
 };
 
-/* The operation set. 
- * (I should probably call these mnemonics also. That's the typical assembly nomenclature.) */
-enum operation {
-	OPERATION_CLS,
-	OPERATION_RET,
-	OPERATION_SYS,
-	OPERATION_CALL,
-	OPERATION_JP,
-	OPERATION_SE,
-	OPERATION_SNE,
-	OPERATION_LD,
-	OPERATION_ADD,
-	OPERATION_AND,
-	OPERATION_OR,
-	OPERATION_XOR,
-	OPERATION_SUB,
-	OPERATION_SHR,
-	OPERATION_SUBN,
-	OPERATION_SHL,
-	OPERATION_RND,
-	OPERATION_DRW,
-	OPERATION_SKP,
-	OPERATION_SKNP,
-	OPERATION_UNKNOWN
+/* The mnemonic set. */
+enum mnemonic {
+	MNEMONIC_CLS,
+	MNEMONIC_RET,
+	MNEMONIC_SYS,
+	MNEMONIC_CALL,
+	MNEMONIC_JP,
+	MNEMONIC_JP_V0,
+	MNEMONIC_SE,
+	MNEMONIC_SNE,
+	MNEMONIC_LD,
+	MNEMONIC_ADD,
+	MNEMONIC_AND,
+	MNEMONIC_OR,
+	MNEMONIC_XOR,
+	MNEMONIC_SUB,
+	MNEMONIC_SHR,
+	MNEMONIC_SUBN,
+	MNEMONIC_SHL,
+	MNEMONIC_RND,
+	MNEMONIC_DRW,
+	MNEMONIC_SKP,
+	MNEMONIC_SKNP,
+	MNEMONIC_UNKNOWN
 };
 
-/* The textual Symbols for operations. */
-static const char operationSymbols[][TOKEN_SIZE] = {
+/* The textual Symbols for mnemonics. */
+static const char mnemonicSymbols[][TOKEN_SIZE] = {
 	"CLS",
 	"RET",
 	"SYS",
 	"CALL",
 	"JP",
+	"JP\tV0",
 	"SE",
 	"SNE",
 	"LD",
@@ -91,11 +90,8 @@ static const char operationSymbols[][TOKEN_SIZE] = {
 	"SKNP"
 };
 
-/* Some of the textual Symbols for parameters. */
-static const char parameterSymbols[][TOKEN_SIZE] = {
-	"V0",
-    /* I need to know if a parameter is "V0" specifically as it indentifies 
-     * the jump operation where any other register address is illegal. */
+/* Some of the textual Symbols for operands. */
+static const char operandSymbols[][TOKEN_SIZE] = {
 	"DT",
 	"ST",
 	"I",
@@ -105,47 +101,47 @@ static const char parameterSymbols[][TOKEN_SIZE] = {
 	"[I]",
 };
 
-struct instructionSymbol {
-	enum operation op;
-	enum parameter params[3];
+struct instructionType {
+	enum mnemonic op;
+	enum operand operands[3];
 };
 
-static struct instructionSymbol instructionSymbols[INTERP_INSTRUCTIONSET_LEN] = {
-	{OPERATION_CLS, {PARAMETER_NONE,	PARAMETER_NONE, PARAMETER_NONE} },
-	{OPERATION_RET, {PARAMETER_NONE,	PARAMETER_NONE, PARAMETER_NONE} },
-	{OPERATION_SYS, {PARAMETER_ADDR,	PARAMETER_NONE, PARAMETER_NONE} },
-	{OPERATION_JP,  {PARAMETER_ADDR,	PARAMETER_NONE, PARAMETER_NONE} },
-	{OPERATION_CALL,	{PARAMETER_ADDR,	PARAMETER_NONE, PARAMETER_NONE} },
-	{OPERATION_SE,  {PARAMETER_VX,  PARAMETER_BYTE, PARAMETER_NONE} },
-	{OPERATION_SNE, {PARAMETER_VX,  PARAMETER_BYTE, PARAMETER_NONE} },
-	{OPERATION_SE,  {PARAMETER_VX,  PARAMETER_VY,   PARAMETER_NONE} },
-	{OPERATION_LD,  {PARAMETER_VX,  PARAMETER_BYTE, PARAMETER_NONE} },
-	{OPERATION_ADD, {PARAMETER_VX,  PARAMETER_BYTE, PARAMETER_NONE} },
-	{OPERATION_LD,  {PARAMETER_VX,  PARAMETER_VY,   PARAMETER_NONE} },
-	{OPERATION_OR,  {PARAMETER_VX,  PARAMETER_VY,   PARAMETER_NONE} },
-	{OPERATION_AND, {PARAMETER_VX,  PARAMETER_VY,   PARAMETER_NONE} },
-	{OPERATION_XOR, {PARAMETER_VX,  PARAMETER_VY,   PARAMETER_NONE} },
-	{OPERATION_ADD, {PARAMETER_VX,  PARAMETER_VY,   PARAMETER_NONE} },
-	{OPERATION_SUB, {PARAMETER_VX,  PARAMETER_VY,   PARAMETER_NONE} },
-	{OPERATION_SHR, {PARAMETER_VX,  PARAMETER_VY,   PARAMETER_NONE} },
-	{OPERATION_SUBN,	{PARAMETER_VX,  PARAMETER_VY,   PARAMETER_NONE} },
-	{OPERATION_SHL, {PARAMETER_VX,  PARAMETER_VY,   PARAMETER_NONE} },
-	{OPERATION_SNE, {PARAMETER_VX,  PARAMETER_VY,   PARAMETER_NONE} },
-	{OPERATION_LD,  {PARAMETER_I,   PARAMETER_ADDR, PARAMETER_NONE} },
-	{OPERATION_JP,  {PARAMETER_V0,  PARAMETER_ADDR, PARAMETER_NONE} },
-	{OPERATION_RND, {PARAMETER_VX,  PARAMETER_BYTE, PARAMETER_NONE} },
-	{OPERATION_DRW, {PARAMETER_VX,  PARAMETER_VY,   PARAMETER_NIBBLE} },
-	{OPERATION_SKP, {PARAMETER_VX,  PARAMETER_NONE, PARAMETER_NONE} },
-	{OPERATION_SKNP,	{PARAMETER_VX,  PARAMETER_NONE, PARAMETER_NONE} },
-	{OPERATION_LD,  {PARAMETER_VX,  PARAMETER_DT,   PARAMETER_NONE} },
-	{OPERATION_LD,  {PARAMETER_VX,  PARAMETER_K,	PARAMETER_NONE} },
-	{OPERATION_LD,  {PARAMETER_DT,  PARAMETER_VX,   PARAMETER_NONE} },
-	{OPERATION_LD,  {PARAMETER_ST,  PARAMETER_VX,   PARAMETER_NONE} },
-	{OPERATION_ADD, {PARAMETER_I,   PARAMETER_VX,   PARAMETER_NONE} },
-	{OPERATION_LD,  {PARAMETER_F,   PARAMETER_VX,   PARAMETER_NONE} },
-	{OPERATION_LD,  {PARAMETER_B,   PARAMETER_VX,   PARAMETER_NONE } },
-	{OPERATION_LD,  {PARAMETER_MEMINDEX,	PARAMETER_VX,		   PARAMETER_NONE} },
-	{OPERATION_LD,  {PARAMETER_VX,		  PARAMETER_MEMINDEX,	 PARAMETER_NONE} }
+static struct instructionType instructionTypes[INTERP_INSTRUCTIONSET_LEN] = {
+	{MNEMONIC_CLS, {OPERAND_NONE,	OPERAND_NONE, OPERAND_NONE} },
+	{MNEMONIC_RET, {OPERAND_NONE,	OPERAND_NONE, OPERAND_NONE} },
+	{MNEMONIC_SYS, {OPERAND_ADDR,	OPERAND_NONE, OPERAND_NONE} },
+	{MNEMONIC_JP,  {OPERAND_ADDR,	OPERAND_NONE, OPERAND_NONE} },
+	{MNEMONIC_CALL,	{OPERAND_ADDR,	OPERAND_NONE, OPERAND_NONE} },
+	{MNEMONIC_SE,  {OPERAND_VX,  OPERAND_BYTE, OPERAND_NONE} },
+	{MNEMONIC_SNE, {OPERAND_VX,  OPERAND_BYTE, OPERAND_NONE} },
+	{MNEMONIC_SE,  {OPERAND_VX,  OPERAND_VY,   OPERAND_NONE} },
+	{MNEMONIC_LD,  {OPERAND_VX,  OPERAND_BYTE, OPERAND_NONE} },
+	{MNEMONIC_ADD, {OPERAND_VX,  OPERAND_BYTE, OPERAND_NONE} },
+	{MNEMONIC_LD,  {OPERAND_VX,  OPERAND_VY,   OPERAND_NONE} },
+	{MNEMONIC_OR,  {OPERAND_VX,  OPERAND_VY,   OPERAND_NONE} },
+	{MNEMONIC_AND, {OPERAND_VX,  OPERAND_VY,   OPERAND_NONE} },
+	{MNEMONIC_XOR, {OPERAND_VX,  OPERAND_VY,   OPERAND_NONE} },
+	{MNEMONIC_ADD, {OPERAND_VX,  OPERAND_VY,   OPERAND_NONE} },
+	{MNEMONIC_SUB, {OPERAND_VX,  OPERAND_VY,   OPERAND_NONE} },
+	{MNEMONIC_SHR, {OPERAND_VX,  OPERAND_VY,   OPERAND_NONE} },
+	{MNEMONIC_SUBN,	{OPERAND_VX,  OPERAND_VY,   OPERAND_NONE} },
+	{MNEMONIC_SHL, {OPERAND_VX,  OPERAND_VY,   OPERAND_NONE} },
+	{MNEMONIC_SNE, {OPERAND_VX,  OPERAND_VY,   OPERAND_NONE} },
+	{MNEMONIC_LD,  {OPERAND_I,   OPERAND_ADDR, OPERAND_NONE} },
+	{MNEMONIC_JP_V0,  {OPERAND_ADDR,  OPERAND_NONE, OPERAND_NONE} },
+	{MNEMONIC_RND, {OPERAND_VX,  OPERAND_BYTE, OPERAND_NONE} },
+	{MNEMONIC_DRW, {OPERAND_VX,  OPERAND_VY,   OPERAND_NIBBLE} },
+	{MNEMONIC_SKP, {OPERAND_VX,  OPERAND_NONE, OPERAND_NONE} },
+	{MNEMONIC_SKNP,	{OPERAND_VX,  OPERAND_NONE, OPERAND_NONE} },
+	{MNEMONIC_LD,  {OPERAND_VX,  OPERAND_DT,   OPERAND_NONE} },
+	{MNEMONIC_LD,  {OPERAND_VX,  OPERAND_K,	OPERAND_NONE} },
+	{MNEMONIC_LD,  {OPERAND_DT,  OPERAND_VX,   OPERAND_NONE} },
+	{MNEMONIC_LD,  {OPERAND_ST,  OPERAND_VX,   OPERAND_NONE} },
+	{MNEMONIC_ADD, {OPERAND_I,   OPERAND_VX,   OPERAND_NONE} },
+	{MNEMONIC_LD,  {OPERAND_F,   OPERAND_VX,   OPERAND_NONE} },
+	{MNEMONIC_LD,  {OPERAND_B,   OPERAND_VX,   OPERAND_NONE } },
+	{MNEMONIC_LD,  {OPERAND_MEMINDEX,	OPERAND_VX,		   OPERAND_NONE} },
+	{MNEMONIC_LD,  {OPERAND_VX,		  OPERAND_MEMINDEX,	 OPERAND_NONE} }
 };
 
 
@@ -222,8 +218,8 @@ int assm_disassemble(void)
 
 	int programSize;
 	char token[TOKEN_SIZE] = "";
-	char op[STRING_SIZE] = "";
-	char arguments[STRING_SIZE] = "";
+	char mnemonicOutputToken[STRING_SIZE] = "";
+	char operandOutputTokens[STRING_SIZE] = "";
 	uint8_t spriteData[INTERP_SPRITE_DATA_MAX];
 	unsigned int spriteDataCount = 0;
 
@@ -245,18 +241,18 @@ int assm_disassemble(void)
 				return -1;
 			}
 
-			struct instructionSymbol insSym = instructionSymbols[instruction.id];
+			struct instructionType insType = instructionTypes[instruction.id];
 
-			strcpy(op, operationSymbols[insSym.op]);
-			enum parameter *i = insSym.params;
+			strcpy(mnemonicOutputToken, mnemonicSymbols[insType.op]);
+			enum operand *i = insType.operands;
 
-			while(i - insSym.params < 3 && *i != PARAMETER_NONE)
+			while(i - insType.operands < 3 && *i != OPERAND_NONE)
 			{
 				switch(*i){
-					case PARAMETER_ADDR:
-						/* if the memory address parameter is not inside the program, or
-						 * for some god known reason in the middle of an instruction
-						 * then that address can not be labeled and the parameter will be a
+					case OPERAND_ADDR:
+						/* if the memory address operand is not inside the program, or
+						 * for some ungodly reason in the middle of an instruction
+						 * then that address cannot be labeled and the operand will be a
 						 * memory address literal.
 						 */
 						if( !(instruction.nnn % 2 == 1 && IS_LOGIC(instruction.nnn - 1)) 
@@ -266,34 +262,34 @@ int assm_disassemble(void)
 						else 
 							snprintf(token, TOKEN_SIZE, "#%03X" /* a memory address literal */, instruction.nnn);
 						break;
-					case PARAMETER_BYTE:
+					case OPERAND_BYTE:
 						snprintf(token, TOKEN_SIZE, "#%02X", instruction.kk);
 						break;
-					case PARAMETER_VX:
+					case OPERAND_VX:
 						snprintf(token, TOKEN_SIZE, "V%01X", instruction.x);
 						break;
-					case PARAMETER_VY:
+					case OPERAND_VY:
 						snprintf(token, TOKEN_SIZE, "V%01X", instruction.y);
 						break;
-					case PARAMETER_NIBBLE:
+					case OPERAND_NIBBLE:
 						snprintf(token, TOKEN_SIZE, "#%01X", instruction.n);
 						break;
 					default:
-						snprintf(token, TOKEN_SIZE, "%s", parameterSymbols[*i]);
+						snprintf(token, TOKEN_SIZE, "%s", operandSymbols[*i]);
 						break;
 				}
 
-				strncat(arguments, token, STRING_SIZE - 1);
+				strncat(operandOutputTokens, token, STRING_SIZE - 1);
 
-				if(*++i != PARAMETER_NONE)
+				if(*++i != OPERAND_NONE)
 				{   // Space if more argument tokens follow
-					strncat(arguments, " ", STRING_SIZE - 1);
+					strncat(operandOutputTokens, " ", STRING_SIZE - 1);
 				}
 
 			}
 
-			if(IS_LABEL(addr)) printf("L%03X\t%s\t%-20s;%04X\n", addr, op, arguments, WORD(addr));
-			else			   printf("\t%s\t%-20s;%04X\n", op, arguments, WORD(addr));
+			if(IS_LABEL(addr)) printf("L%03X\t%s\t%-20s;%04X\n", addr, mnemonicOutputToken, operandOutputTokens, WORD(addr));
+			else			   printf("\t%s\t%-20s;%04X\n", mnemonicOutputToken, operandOutputTokens, WORD(addr));
 
 			addr += 2;
 		}
@@ -316,26 +312,26 @@ int assm_disassemble(void)
 
 				printf("L%03X", (addr - spriteDataCount));
 				while( i < spriteDataCount ){
-					strncpy(op, "db", TOKEN_SIZE);
+					strncpy(mnemonicOutputToken, "db", TOKEN_SIZE);
 
 					for(int j=0; i < spriteDataCount && j < 4; j++, i++){
 						snprintf(token, TOKEN_SIZE, "#%02X", spriteData[i]);
 
-						strncat(arguments, token, STRING_SIZE - 1);
+						strncat(operandOutputTokens, token, STRING_SIZE - 1);
 
 						if(j+1 < 4 && i+1 < spriteDataCount)
 						{   //space if more byte tokens follow 
-							strncat(arguments, " ", STRING_SIZE - 1);
+							strncat(operandOutputTokens, " ", STRING_SIZE - 1);
 						}
 					}
-					printf("\t%s\t%-10s\n", op, arguments);
-					arguments[0] = '\0';
+					printf("\t%s\t%-10s\n", mnemonicOutputToken, operandOutputTokens);
+					operandOutputTokens[0] = '\0';
 				}
 				spriteDataCount = 0;
 
 			}
 		}
-		arguments[0] = '\0';
+		operandOutputTokens[0] = '\0';
 
 	}
 
@@ -345,22 +341,17 @@ int assm_disassemble(void)
 typedef char* token_t;
 typedef token_t* statement_t;
 
-/* I don't even need these two macros, nor do i need to allocate memory.
- * not sure what I was thinking. */
 #define TOKEN_INIT (memset(calloc(sizeof(char), TOKEN_SIZE), '\0', sizeof(char)))
 #define STATEMENT_INIT(N) (memset(calloc(sizeof(char*), N), 0, sizeof(char*) * N))
 
 #define WHITESPACE " \t\n"
 #define ISWHITESPACE(C) ((C) == ' ' || (C) == '\t' || (C) == '\n')
 
-#define PARAMETER_XY PARAMETER_VX
+#define OPERAND_XY OPERAND_VX
 
-/* really need to change the names of these macros 
- * something like BIT_SQUISH would be funny and also make
- * more sense. */
-#define ARG_1(N) ( (N + 7) )
-#define ARG_2(N) ( (N + 7) << 4 )
-#define ARG_3(N) ( (N + 7) << 8 )
+#define ENCODE_OPERAND_1(N) ( (N + 6) )
+#define ENCODE_OPERAND_2(N) ( (N + 6) << 4 )
+#define ENCODE_OPERAND_3(N) ( (N + 6) << 8 )
 
 static inline int createStatement(statement_t s, char* line){
 	token_t token; 
@@ -423,7 +414,7 @@ int assm_assemble(const char* fileName)
 	char* line = malloc(STRING_SIZE);
 	int lineNumber = 1;
 	int addr = INTERP_PROGRAM_START;
-	int parameters[3];
+	int operands[3];
 	util_linkedDictionary incompleteInstructions;
 	util_dictionary labels;
 
@@ -537,60 +528,54 @@ int assm_assemble(const char* fileName)
 		}
 		else
 		{
-			enum operation op;
+			enum mnemonic op;
 			uint8_t isy = 0;
-			enum parameter parameterTokens[3] = {
-				PARAMETER_NONE, PARAMETER_NONE, PARAMETER_NONE
+			enum operand operandTokens[3] = {
+				OPERAND_NONE, OPERAND_NONE, OPERAND_NONE
 			};
 
-            /* The operation token is compared with each symbol in the operation set. */
-			for(op = OPERATION_CLS; 
-					op < OPERATION_UNKNOWN && strcmp(statement[statementIndex], operationSymbols[op]) != 0; 
+            /* The mnemonic token is compared with each symbol in the mnemonic set. */
+			for(op = MNEMONIC_CLS; 
+					op < MNEMONIC_UNKNOWN && strcmp(statement[statementIndex], mnemonicSymbols[op]) != 0; 
 					op++);
-			if(op == OPERATION_UNKNOWN){
-				setError("%d: unknown operation \"%s\"", 
+			if(op == MNEMONIC_UNKNOWN){
+				setError("%d: unknown mnemonic \"%s\"", 
 						lineNumber, 
 						statement[statementIndex]);
 				return -1;
 			}
 
-            /* a much more intuitive way of handling that jump operation than the autism I'm doing now
-            if( op == OPERATION_JP && strcmp(statement[++statementIndex], "V0") ){
-                op = OPERATION_JP_V0 (you would add this to the enum,
-                                        because if i understand correctly it's considered an "extended mnemonic")
+            // A much more intuitive way of handling that jump operation than the garbage I was doing.
+            if( strcmp(statement[++statementIndex], "V0") == 0 && op == MNEMONIC_JP ){
+                op = MNEMONIC_JP_V0;
             }
-            */
                 
 
-            /* For each parameter token, */
-			++statementIndex;
-			for(uint8_t parameterIndex = 0; 
-					parameterIndex < 3 && *statement[statementIndex] != '\0'; 
-					++statementIndex, ++parameterIndex){
+            /* For each operand token, */
+			for(uint8_t operandIndex = 0; 
+					operandIndex < 3 && *statement[statementIndex] != '\0'; 
+					++statementIndex, ++operandIndex){
 
-                /* that parameter token is compared with some of the 
+                /* that operand token is compared with some of the 
                  * symbols that are invariable. */
 				for(
-				parameterTokens[parameterIndex] = PARAMETER_V0; 
-				parameterTokens[parameterIndex] < PARAMETER_UNKNOWN 
-					&& strcmp(statement[statementIndex], parameterSymbols[parameterTokens[parameterIndex]]) != 0; 
-				parameterTokens[parameterIndex]++
+				operandTokens[operandIndex] = OPERAND_DT; 
+				operandTokens[operandIndex] < OPERAND_UNKNOWN 
+					&& strcmp(statement[statementIndex], operandSymbols[operandTokens[operandIndex]]) != 0; 
+				operandTokens[operandIndex]++
 				);
 
-				if(parameterTokens[parameterIndex] == PARAMETER_V0)
-					isy++;
-
-                /* If the parameter is not one those symbols
+                /* If the operand is not one those symbols
                  * then it's variable; which is to say it could be one of 
                  * a memory address label, memory address literal, byte literal, 
-                 * register address literal, or nibble literal. */
-				if(parameterTokens[parameterIndex] == PARAMETER_UNKNOWN)
+                 * register address, or nibble literal. */
+				if(operandTokens[operandIndex] == OPERAND_UNKNOWN)
 				{
                     // label
 					if( isLabelSym(statement[statementIndex]) ){
 						int val;
 
-						parameterTokens[parameterIndex] = PARAMETER_ADDR;
+						operandTokens[operandIndex] = OPERAND_ADDR;
 
 						if(util_search(labels, 
 									&statement[statementIndex][1],
@@ -608,17 +593,17 @@ int assm_assemble(const char* fileName)
 					}
                     // memory address literal
 					else if( isAddressLiteral(statement[statementIndex]) ){
-						parameterTokens[parameterIndex] = PARAMETER_ADDR;
+						operandTokens[operandIndex] = OPERAND_ADDR;
 						instruction.nnn = (int)strtol(&statement[statementIndex][1], (char**)NULL, 16);
 					}
                     // byte literal
 					else if( isByteSym(statement[statementIndex]) ){
-						parameterTokens[parameterIndex] = PARAMETER_BYTE;
+						operandTokens[operandIndex] = OPERAND_BYTE;
 						instruction.kk = (int)strtol(&statement[statementIndex][1], (char**)NULL, 16);
 					}
                     // register address literal
 					else if( isxySym(statement[statementIndex])){
-						parameterTokens[parameterIndex] = PARAMETER_XY;
+						operandTokens[operandIndex] = OPERAND_XY;
 						if(isy++)
 							instruction.y = (int)strtol(&statement[statementIndex][1], (char**)NULL, 16);
 						else
@@ -626,168 +611,150 @@ int assm_assemble(const char* fileName)
 					}
                     // nibble literal
 					else if( isNibbleSym(statement[statementIndex]) ){
-						parameterTokens[parameterIndex] = PARAMETER_NIBBLE;
+						operandTokens[operandIndex] = OPERAND_NIBBLE;
 						instruction.n = (int)strtol(&statement[statementIndex][1], (char**)NULL, 16);
 					}
 				}
 
-				if(parameterTokens[parameterIndex] == PARAMETER_UNKNOWN) 
-					setError("%d: unknown parameter %s", 
+				if(operandTokens[operandIndex] == OPERAND_UNKNOWN) 
+					setError("%d: unknown operand %s", 
 							lineNumber, 
 							statement[statementIndex]);
 			}
 
             // and this is absolutely garbage!
 			++statementIndex;
-			switch(ARG_1(parameterTokens[0]) | ARG_2(parameterTokens[1]) | ARG_3(parameterTokens[2]))
+			switch(ENCODE_OPERAND_1(operandTokens[0]) | ENCODE_OPERAND_2(operandTokens[1]) | ENCODE_OPERAND_3(operandTokens[2]))
 			{
-				case ARG_1(PARAMETER_NONE) | ARG_2(PARAMETER_NONE) | ARG_3(PARAMETER_NONE):
+				case 0 | 0 | 0:
 					switch(op){
-						case OPERATION_CLS:
+						case MNEMONIC_CLS:
 							instruction.id = INTERP_CLS;
 							break;
-						case OPERATION_RET:
+						case MNEMONIC_RET:
 							instruction.id = INTERP_RET;
 							break;
 					}
 					break;
-				case ARG_1(PARAMETER_XY) | ARG_2(PARAMETER_XY) | ARG_3(PARAMETER_NONE):
-				case ARG_1(PARAMETER_V0) | ARG_2(PARAMETER_XY) | ARG_3(PARAMETER_NONE):
-				case ARG_1(PARAMETER_XY) | ARG_2(PARAMETER_V0) | ARG_3(PARAMETER_NONE):
-				case ARG_1(PARAMETER_V0) | ARG_2(PARAMETER_V0) | ARG_3(PARAMETER_NONE):
+				case ENCODE_OPERAND_1(OPERAND_XY) | ENCODE_OPERAND_2(OPERAND_XY) | 0:
 					switch(op){
-						case OPERATION_SE:
+						case MNEMONIC_SE:
 							instruction.id = INTERP_SE_VX_VY;
 							break;
-						case OPERATION_LD:
+						case MNEMONIC_LD:
 							instruction.id = INTERP_LD_VX_VY;
 							break;
-						case OPERATION_OR:
+						case MNEMONIC_OR:
 							instruction.id = INTERP_OR_VX_VY;
 							break;
-						case OPERATION_AND:
+						case MNEMONIC_AND:
 							instruction.id = INTERP_AND_VX_VY;
 							break;
-						case OPERATION_XOR:
+						case MNEMONIC_XOR:
 							instruction.id = INTERP_XOR_VX_VY;
 							break;
-						case OPERATION_ADD:
+						case MNEMONIC_ADD:
 							instruction.id = INTERP_ADD_VX_VY;
 							break;
-						case OPERATION_SUB:
+						case MNEMONIC_SUB:
 							instruction.id = INTERP_SUB_VX_VY;
 							break;
-						case OPERATION_SHR:
+						case MNEMONIC_SHR:
 							instruction.id = INTERP_SHR_VX_VY;
 							break;
-						case OPERATION_SUBN:
+						case MNEMONIC_SUBN:
 							instruction.id = INTERP_SUBN_VX_VY;
 							break;
-						case OPERATION_SHL:
+						case MNEMONIC_SHL:
 							instruction.id = INTERP_SHL_VX_VY;
 							break;
-						case OPERATION_SNE:
+						case MNEMONIC_SNE:
 							instruction.id = INTERP_SNE_VX_VY;
 							break;
 					}
 					break;
-				case ARG_1(PARAMETER_XY) | ARG_2(PARAMETER_XY) | ARG_3(PARAMETER_NIBBLE):
-				case ARG_1(PARAMETER_V0) | ARG_2(PARAMETER_XY) | ARG_3(PARAMETER_NIBBLE):
-				case ARG_1(PARAMETER_XY) | ARG_2(PARAMETER_V0) | ARG_3(PARAMETER_NIBBLE):
-				case ARG_1(PARAMETER_V0) | ARG_2(PARAMETER_V0) | ARG_3(PARAMETER_NIBBLE):
-					if(op == OPERATION_DRW)
+				case ENCODE_OPERAND_1(OPERAND_XY) | ENCODE_OPERAND_2(OPERAND_XY) | ENCODE_OPERAND_3(OPERAND_NIBBLE):
+					if(op == MNEMONIC_DRW)
 						instruction.id = INTERP_DRW_VX_VY_NIBBLE;
 					break;
-				case ARG_1(PARAMETER_XY) | ARG_2(PARAMETER_BYTE) | ARG_3(PARAMETER_NONE):
-				case ARG_1(PARAMETER_V0) | ARG_2(PARAMETER_BYTE) | ARG_3(PARAMETER_NONE):
+				case ENCODE_OPERAND_1(OPERAND_XY) | ENCODE_OPERAND_2(OPERAND_BYTE) | 0:
 					switch(op){
-						case OPERATION_SE:
+						case MNEMONIC_SE:
 							instruction.id = INTERP_SE_VX_BYTE;
 							break;
-						case OPERATION_SNE:
+						case MNEMONIC_SNE:
 							instruction.id = INTERP_SNE_VX_BYTE;
 							break;
-						case OPERATION_LD:
+						case MNEMONIC_LD:
 							instruction.id = INTERP_LD_VX_BYTE;
 							break;
-						case OPERATION_ADD:
+						case MNEMONIC_ADD:
 							instruction.id = INTERP_ADD_VX_BYTE;
 							break;
-						case OPERATION_RND:
+						case MNEMONIC_RND:
 							instruction.id = INTERP_RND_VX_BYTE;
 							break;
-					}
+                    }
 					break;
-				case ARG_1(PARAMETER_XY) | ARG_2(PARAMETER_DT) | ARG_3(PARAMETER_NONE):
-				case ARG_1(PARAMETER_V0) | ARG_2(PARAMETER_DT) | ARG_3(PARAMETER_NONE):
-					if(op == OPERATION_LD)
-						instruction.id = INTERP_LD_VX_DT;
+				case ENCODE_OPERAND_1(OPERAND_XY) | ENCODE_OPERAND_2(OPERAND_DT) | 0:
+					if(op == MNEMONIC_LD)
+				        instruction.id = INTERP_LD_VX_DT;
 					break;
-				case ARG_1(PARAMETER_XY) | ARG_2(PARAMETER_K) | ARG_3(PARAMETER_NONE):
-				case ARG_1(PARAMETER_V0) | ARG_2(PARAMETER_K) | ARG_3(PARAMETER_NONE):
-					if(op == OPERATION_LD)
+				case ENCODE_OPERAND_1(OPERAND_XY) | ENCODE_OPERAND_2(OPERAND_K) | 0:
+					if(op == MNEMONIC_LD)
 						instruction.id = INTERP_LD_VX_K;
 					break;
-				case ARG_1(PARAMETER_XY) | ARG_2(PARAMETER_MEMINDEX) | ARG_3(PARAMETER_NONE):
-				case ARG_1(PARAMETER_V0) | ARG_2(PARAMETER_MEMINDEX) | ARG_3(PARAMETER_NONE):
-					if(op == OPERATION_LD)
+				case ENCODE_OPERAND_1(OPERAND_XY) | ENCODE_OPERAND_2(OPERAND_MEMINDEX) | 0:
+					if(op == MNEMONIC_LD)
 						instruction.id = INTERP_LD_VX_MEMINDEX;
 					break;
-				case ARG_1(PARAMETER_XY) | ARG_2(PARAMETER_NONE) | ARG_3(PARAMETER_NONE):
-				case ARG_1(PARAMETER_V0) | ARG_2(PARAMETER_NONE) | ARG_3(PARAMETER_NONE):
+				case ENCODE_OPERAND_1(OPERAND_XY) | 0 | 0:
 					switch(op){
-						case OPERATION_SKP:
+						case MNEMONIC_SKP:
 							instruction.id = INTERP_SKP_VX;
 							break;
-						case OPERATION_SKNP:
+						case MNEMONIC_SKNP:
 							instruction.id = INTERP_SKNP_VX;
 							break;
 					}
 					break;
-				case ARG_1(PARAMETER_DT) | ARG_2(PARAMETER_XY) | ARG_3(PARAMETER_NONE):
-				case ARG_1(PARAMETER_DT) | ARG_2(PARAMETER_V0) | ARG_3(PARAMETER_NONE):
-					if(op == OPERATION_LD)
+				case ENCODE_OPERAND_1(OPERAND_DT) | ENCODE_OPERAND_2(OPERAND_XY) | 0:
+					if(op == MNEMONIC_LD)
 						instruction.id = INTERP_LD_DT_VX;
 					break;
-				case ARG_1(PARAMETER_ST) | ARG_2(PARAMETER_XY) | ARG_3(PARAMETER_NONE):
-				case ARG_1(PARAMETER_ST) | ARG_2(PARAMETER_V0) | ARG_3(PARAMETER_NONE):
-					if(op == OPERATION_LD)
+				case ENCODE_OPERAND_1(OPERAND_ST) | ENCODE_OPERAND_2(OPERAND_XY) | 0:
+					if(op == MNEMONIC_LD)
 						instruction.id = INTERP_LD_ST_VX;
 					break;
-				case ARG_1(PARAMETER_I) | ARG_2(PARAMETER_XY) | ARG_3(PARAMETER_NONE):
-				case ARG_1(PARAMETER_I) | ARG_2(PARAMETER_V0) | ARG_3(PARAMETER_NONE):
-					if(op == OPERATION_ADD)
+				case ENCODE_OPERAND_1(OPERAND_I) | ENCODE_OPERAND_2(OPERAND_XY) | 0:
+					if(op == MNEMONIC_ADD)
 						instruction.id = INTERP_ADD_I_VX;
 					break;
-				case ARG_1(PARAMETER_F) | ARG_2(PARAMETER_XY) | ARG_3(PARAMETER_NONE):
-				case ARG_1(PARAMETER_F) | ARG_2(PARAMETER_V0) | ARG_3(PARAMETER_NONE):
-					if(op == OPERATION_LD)
+				case ENCODE_OPERAND_1(OPERAND_F) | ENCODE_OPERAND_2(OPERAND_XY) | 0:
+					if(op == MNEMONIC_LD)
 						instruction.id = INTERP_LD_F_VX;
 					break;
-				case ARG_1(PARAMETER_B) | ARG_2(PARAMETER_XY) | ARG_3(PARAMETER_NONE):
-				case ARG_1(PARAMETER_B) | ARG_2(PARAMETER_V0) | ARG_3(PARAMETER_NONE):
-					if(op == OPERATION_LD)
+				case ENCODE_OPERAND_1(OPERAND_B) | ENCODE_OPERAND_2(OPERAND_XY) | 0:
+					if(op == MNEMONIC_LD)
 						instruction.id = INTERP_LD_B_VX;
 					break;
-				case ARG_1(PARAMETER_MEMINDEX) | ARG_2(PARAMETER_XY) | ARG_3(PARAMETER_NONE):
-				case ARG_1(PARAMETER_MEMINDEX) | ARG_2(PARAMETER_V0) | ARG_3(PARAMETER_NONE):
-					if(op == OPERATION_LD)
+				case ENCODE_OPERAND_1(OPERAND_MEMINDEX) | ENCODE_OPERAND_2(OPERAND_XY) | 0:
+					if(op == MNEMONIC_LD)
 						instruction.id = INTERP_LD_MEMINDEX_VX;
 					break;
-				case ARG_1(PARAMETER_I) | ARG_2(PARAMETER_ADDR) | ARG_3(PARAMETER_NONE):
-					if(op == OPERATION_LD)
+				case ENCODE_OPERAND_1(OPERAND_I) | ENCODE_OPERAND_2(OPERAND_ADDR) | 0:
+					if(op == MNEMONIC_LD)
 						instruction.id = INTERP_LD_I_ADDR;
 					break;
-				case ARG_1(PARAMETER_V0) | ARG_2(PARAMETER_ADDR) | ARG_3(PARAMETER_NONE):
-					if(op == OPERATION_JP)
-						instruction.id = INTERP_JP_V0_ADDR;
-					break;
-				case ARG_1(PARAMETER_ADDR) | ARG_2(PARAMETER_NONE) | ARG_3(PARAMETER_NONE):
+				case ENCODE_OPERAND_1(OPERAND_ADDR) | 0 | 0:
 					switch(op){
-						case OPERATION_JP:
+						case MNEMONIC_JP:
 							instruction.id = INTERP_JP_ADDR;
 							break;
-						case OPERATION_CALL:
+						case MNEMONIC_JP_V0:
+							instruction.id = INTERP_JP_V0_ADDR;
+							break;
+						case MNEMONIC_CALL:
 							instruction.id = INTERP_CALL_ADDR;
 							break;
 					}
@@ -795,9 +762,9 @@ int assm_assemble(const char* fileName)
 			}
 
 			if(instruction.id == INTERP_INSTRUCTION_UNKNOWN){
-				setError("%d: illegal Arguments for %s op\n\t%s", 
+				setError("%d: illegal operands for %s mnemonic\n\t%s", 
 						lineNumber, 
-						operationSymbols[op], 
+						mnemonicSymbols[op], 
 						line);
 				return -1;
 			}
