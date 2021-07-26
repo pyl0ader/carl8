@@ -58,7 +58,6 @@ void dump(void){
 	if(dumpFile == NULL){
 		dumpFile = tmpfile();
 	}
-
 	for(int i = 0; i < errorIndex; i++){
 		fprintf(dumpFile, "%s\n", errorLog[i]);
 	}
