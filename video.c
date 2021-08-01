@@ -227,7 +227,7 @@ int update(void)
 	screenArea.x = 0;
 	screenArea.y = TOOLBAR_HEIGHT;
 	screenArea.w = WIDTH;
-	screenArea.h = TOOLBAR_HEIGHT + HEIGHT;
+	screenArea.h = HEIGHT;
 
     toolbarArea.x = 0;
     toolbarArea.y = 0;
