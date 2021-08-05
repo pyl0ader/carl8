@@ -353,15 +353,26 @@ typedef token_t* statement_t;
 #define ENCODE_OPERAND_2(N) ( (N + 6) << 4 )
 #define ENCODE_OPERAND_3(N) ( (N + 6) << 8 )
 
+/* tokenize a line of assembly text.
+ * return value is 1 if the line is a valid statement,
+ * 0 if it's empty or a comment, and -1 if errors occur. */
 static inline int createStatement(statement_t s, char* line){
 	token_t token; 
 
 	token = strtok(line, WHITESPACE);
-	while(ISWHITESPACE(*token) && token++);
+
+    if(token == NULL)
+        return 0;
+
+	while(ISWHITESPACE(*token) && token++); 
+
+    if(*token == ';')
+        return 0;
+
 	for(int i = 0; token != NULL && *token != ';'; token = strtok(NULL, WHITESPACE), *s[++i] = '\0'  ){
 		strcpy(s[i], token);
 	}
-	return 0;
+    return 1;
 }
 
 static inline int isLabelSym(token_t tok){
@@ -418,6 +429,8 @@ int assm_assemble(const char* fileName)
 	util_linkedDictionary incompleteInstructions;
 	util_dictionary labels;
 
+    char* invalidLabelReferences[INTERP_MEMORY_LEN - INTERP_PROGRAM_START];
+
 	/* Dictionaries (or hashtables) are created for instructions that are 
 	 * incomplete (as in the address of a label is not yet known) and for 
 	 * labels themselves
@@ -445,7 +458,7 @@ int assm_assemble(const char* fileName)
 	statement_t statement = STATEMENT_INIT(8);
 	for(int i = 0; i < 8; statement[i++] = TOKEN_INIT);
 
-	while(getline(&line, &lineSize, assemblyFile) > 0){
+	while(getline(&line, &lineSize, assemblyFile) > 0 ){
 
 		int statementIndex = 0;
 		interp_instruction instruction;
@@ -457,10 +470,8 @@ int assm_assemble(const char* fileName)
 			instruction.y = 
 			instruction.n = 0; 
 
-		if(createStatement(statement, line) < 0 ){
-			setError("createStatement: %s", getError() );
-			return -1;
-		}
+		if(!createStatement(statement, line))
+            continue;
 
 		/* If the first token is a label then the address 
 		 * of this instruction is recorded in _labels_
@@ -557,7 +568,7 @@ int assm_assemble(const char* fileName)
 					++statementIndex, ++operandIndex){
 
                 /* that operand token is compared with some of the 
-                 * symbols that are invariable. */
+                 * operand symbols that are reserved. */
 				for(
 				operandTokens[operandIndex] = OPERAND_DT; 
 				operandTokens[operandIndex] < OPERAND_UNKNOWN 
@@ -565,10 +576,9 @@ int assm_assemble(const char* fileName)
 				operandTokens[operandIndex]++
 				);
 
-                /* If the operand is not one those symbols
-                 * then it's variable; which is to say it could be one of 
-                 * a memory address label, memory address literal, byte literal, 
-                 * register address, or nibble literal. */
+                /* If the operand token does not match one of those symbols
+                 * then it's either a label or a literal 
+                 * i.e. memory address, register address, byte, nibble. */
 				if(operandTokens[operandIndex] == OPERAND_UNKNOWN)
 				{
                     // label
@@ -596,11 +606,6 @@ int assm_assemble(const char* fileName)
 						operandTokens[operandIndex] = OPERAND_ADDR;
 						instruction.nnn = (int)strtol(&statement[statementIndex][1], (char**)NULL, 16);
 					}
-                    // byte literal
-					else if( isByteSym(statement[statementIndex]) ){
-						operandTokens[operandIndex] = OPERAND_BYTE;
-						instruction.kk = (int)strtol(&statement[statementIndex][1], (char**)NULL, 16);
-					}
                     // register address literal
 					else if( isxySym(statement[statementIndex])){
 						operandTokens[operandIndex] = OPERAND_XY;
@@ -608,6 +613,11 @@ int assm_assemble(const char* fileName)
 							instruction.y = (int)strtol(&statement[statementIndex][1], (char**)NULL, 16);
 						else
 							instruction.x = (int)strtol(&statement[statementIndex][1], (char**)NULL, 16);
+					}
+                    // byte literal
+					else if( isByteSym(statement[statementIndex]) ){
+						operandTokens[operandIndex] = OPERAND_BYTE;
+						instruction.kk = (int)strtol(&statement[statementIndex][1], (char**)NULL, 16);
 					}
                     // nibble literal
 					else if( isNibbleSym(statement[statementIndex]) ){
@@ -622,7 +632,6 @@ int assm_assemble(const char* fileName)
 							statement[statementIndex]);
 			}
 
-            // and this is absolutely garbage!
 			++statementIndex;
 			switch(ENCODE_OPERAND_1(operandTokens[0]) | ENCODE_OPERAND_2(operandTokens[1]) | ENCODE_OPERAND_3(operandTokens[2]))
 			{
@@ -781,5 +790,16 @@ int assm_assemble(const char* fileName)
 		lineNumber++;
 	}
 
+    char* undefinedLabel = NULL;
+
+    for(int i = 0; i < UTIL_M; i++){
+        util_linkedDirectIndex(incompleteInstructions, i, &undefinedLabel, NULL);
+        if(undefinedLabel != NULL){
+            setError("\"%s\" label does not exist", undefinedLabel);
+            util_linkedDelete(incompleteInstructions, undefinedLabel);
+            return -1;
+        }
+    }
+        
 	return 0;
 }
