@@ -1,3 +1,5 @@
+#define UTIL_M 239
+
 struct util_linkedPair;
 struct util_pair;
 struct util_linkedList;
@@ -25,6 +27,12 @@ extern int util_insert(util_dictionary d, const char* key, int val);
  * otherwise it's 1. */
 extern int util_search(util_dictionary d, const char* key, int* val);
 
+/* _val_ is set to the directly indexed value at _index_,
+ * and _key_ is set to the string used as the key.
+ * In other words no hash function is applied.
+ * Return value is -1 if errors occur, otherwise it's zero */
+extern int util_directIndex(util_dictionary d, int index, char** key, int* val);
+
 /* The the value at _key_ in _d_ is erased. 
  * Return value is -1 if errors occur, otherwise it's zero */
 extern int util_delete(util_dictionary d, const char* key);
@@ -42,6 +50,12 @@ extern int util_linkedInsert(util_linkedDictionary d, const char* key, int val);
  * Return value is -1 if errors occur, 0 if no linked list is inserted, 
  * otherwise it's 1. */
 extern int util_linkedSearch(util_linkedDictionary d, const char* key, util_linkedList** vals);
+
+/* _vals_ is set to the directly indexed linked list at _index_,
+ * and _key_ is set to the string used as the key.
+ * In other words no hash function is applied.
+ * Return value is -1 if errors occur, otherwise it's zero */
+extern int util_linkedDirectIndex(util_linkedDictionary d, int index, char** key, util_linkedList** vals);
 
 /* the _linkedList_ inserted at _key_ in _d_ is erased.
  * Return value is -1 if errors occur, otherwise it's zero. */
