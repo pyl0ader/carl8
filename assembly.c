@@ -422,8 +422,12 @@ static inline int isxySym(token_t tok){
 int assm_assemble(const char* fileName)
 {
 	size_t lineSize = STRING_SIZE;
-	char* line = malloc(STRING_SIZE);
-	int lineNumber = 1;
+	char* line;
+    char lineCpy[lineSize];
+
+	int lineNumber = 0;
+    int errors = 0;
+
 	int addr = INTERP_PROGRAM_START;
 	int operands[3];
 	util_linkedDictionary incompleteInstructions;
@@ -453,13 +457,14 @@ int assm_assemble(const char* fileName)
 	}
 
 	/* A statement type, _statement_t_, is used for parsing text.
-	 * Theses statement types are arrays of token types _token_t_.
+	 * These statement types are arrays of token types _token_t_.
 	 */
 	statement_t statement = STATEMENT_INIT(8);
 	for(int i = 0; i < 8; statement[i++] = TOKEN_INIT);
 
 	while(getline(&line, &lineSize, assemblyFile) > 0 ){
 
+        int statementErrors = 0;
 		int statementIndex = 0;
 		interp_instruction instruction;
 
@@ -470,6 +475,10 @@ int assm_assemble(const char* fileName)
 			instruction.y = 
 			instruction.n = 0; 
 
+
+        lineNumber++;
+        strncpy(lineCpy, line, lineSize);
+        
 		if(!createStatement(statement, line))
             continue;
 
@@ -499,13 +508,13 @@ int assm_assemble(const char* fileName)
 				int incompleteLowByte;
 
 				do {
-					incompleteLowByte = WORD(vals->val);
+					incompleteLowByte = WORD(vals->item);
 					incompleteLowByte |= addr;
-					if( interp_writeMemory(vals->val, incompleteLowByte >> 8) < 0){
+					if( interp_writeMemory(vals->item, incompleteLowByte >> 8) < 0){
 						setError("interp_writeMemory: %s", getError() );
 						return -1;
 					}
-					if( interp_writeMemory(vals->val + 1, incompleteLowByte & 0xff) < 0){
+					if( interp_writeMemory(vals->item + 1, incompleteLowByte & 0xff) < 0){
 						setError("interp_writeMemory: %s", getError() );
 						return -1;
 					}
@@ -521,7 +530,7 @@ int assm_assemble(const char* fileName)
 
 		if(strcmp(statement[statementIndex], "db") == 0)
 		{	//is data directive 
-			while(isByteSym(statement[++statementIndex])){
+			while(!errors && isByteSym(statement[++statementIndex])){
 				if( interp_writeMemory(addr++, 
 							(uint8_t)strtol(&statement[statementIndex][1], 
 								(char**)NULL, 
@@ -532,10 +541,14 @@ int assm_assemble(const char* fileName)
 				}
 			}
 
-			if(statement[statementIndex][0] != '\0')
-				setError("%d: illegal Argument \"%s\" in data directive", 
+			if(statement[statementIndex][0] != '\0'){
+				setError("%d: illegal token \"%s\" in data directive\n\t%s", 
 						lineNumber, 
-						statement[statementIndex]);
+						statement[statementIndex],
+                        lineCpy);
+                logError();
+                errors++;
+            }
 		}
 		else
 		{
@@ -550,10 +563,13 @@ int assm_assemble(const char* fileName)
 					op < MNEMONIC_UNKNOWN && strcmp(statement[statementIndex], mnemonicSymbols[op]) != 0; 
 					op++);
 			if(op == MNEMONIC_UNKNOWN){
-				setError("%d: unknown mnemonic \"%s\"", 
+				setError("%d: unknown mnemonic \"%s\"\n\t%s", 
 						lineNumber, 
-						statement[statementIndex]);
-				return -1;
+						statement[statementIndex],
+                        lineCpy);
+                logError();
+                errors++;
+                statementErrors++;
 			}
 
             // A much more intuitive way of handling that jump operation than the garbage I was doing.
@@ -626,11 +642,18 @@ int assm_assemble(const char* fileName)
 					}
 				}
 
-				if(operandTokens[operandIndex] == OPERAND_UNKNOWN) 
-					setError("%d: unknown operand %s", 
+				if(operandTokens[operandIndex] == OPERAND_UNKNOWN){
+					setError("%d: unknown operand \"%s\"\n\t%s", 
 							lineNumber, 
-							statement[statementIndex]);
+							statement[statementIndex],
+                            lineCpy);
+                    logError();
+                    errors++;
+                    statementErrors++;
+                }
 			}
+
+            if(statementErrors) continue;
 
 			++statementIndex;
 			switch(ENCODE_OPERAND_1(operandTokens[0]) | ENCODE_OPERAND_2(operandTokens[1]) | ENCODE_OPERAND_3(operandTokens[2]))
@@ -774,32 +797,46 @@ int assm_assemble(const char* fileName)
 				setError("%d: illegal operands for %s mnemonic\n\t%s", 
 						lineNumber, 
 						mnemonicSymbols[op], 
-						line);
-				return -1;
+						lineCpy);
+                logError();
+                errors++;
+                continue;
 			}
-			else { 
+			if(!errors){ 
 				if( interp_encode(addr, instruction) < 0 ){
 					setError("interp_encode: %s", getError() );
 					return -1;
 				}
+			    addr += 2;
 			}
-
-			addr += 2;
 		}
-
-		lineNumber++;
 	}
 
-    char* undefinedLabel = NULL;
+    lineNumber = 0;
+    fseek(assemblyFile, 0, SEEK_SET);
+    
+	while(getline(&line, &lineSize, assemblyFile) > 0 ){
+        
+        strncpy(lineCpy, line, STRING_SIZE);
+        createStatement(statement, line);
 
-    for(int i = 0; i < UTIL_M; i++){
-        util_linkedDirectIndex(incompleteInstructions, i, &undefinedLabel, NULL);
-        if(undefinedLabel != NULL){
-            setError("\"%s\" label does not exist", undefinedLabel);
-            util_linkedDelete(incompleteInstructions, undefinedLabel);
-            return -1;
+        lineNumber++;
+
+        util_linkedList* list;
+        for(int i=1; i < 4 && statement[i][0] != '\0'; i++){
+
+            if(isLabelSym(statement[i]) 
+            && util_linkedSearch(incompleteInstructions, &statement[i][1], &list) 
+              ){
+                setError("%d: %s has not been defined\n\t%s", lineNumber, statement[i], lineCpy);
+                logError();
+            }
         }
     }
         
-	return 0;
+	if(errors){
+        setError("Syntax errors");
+        return -1;
+    }
+    else return 0;
 }
