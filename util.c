@@ -6,20 +6,20 @@
 #include "logError.h"
 #include "util.h"
 
-#define H1(K) (K % UTIL_M)
-#define H2(K) (1 + (K % (UTIL_M - 1)) )
-#define HASH(K, I) ( ( H1(K) + i * H2(K) ) % UTIL_M)
+#define H1(K) (K % UTIL_TABLESIZE)
+#define H2(K) (1 + (K % (UTIL_TABLESIZE - 1)) )
+#define HASH(K, I) ( ( H1(K) + i * H2(K) ) % UTIL_TABLESIZE)
 
 struct util_pair {
 	unsigned long numericKey;
 	char* textKey;
-	int val;
+	int item;
 };
 
 struct util_linkedPair {
 	unsigned long numericKey;
 	char* textKey; 
-	util_linkedList vals;
+	util_linkedList list;
 };
 
 static unsigned long strToLong(const char* str){
@@ -34,14 +34,14 @@ static unsigned long strToLong(const char* str){
 }
 
 int util_createDictionary(util_dictionary* d){
-	*d = malloc(sizeof(struct util_pair*) * UTIL_M);
+	*d = malloc(sizeof(struct util_pair*) * UTIL_TABLESIZE);
 
 	if(*d == NULL){
 		setError("malloc: %s", strerror(errno) );
 		return -1;
 	}
 
-	memset(*d, 0, sizeof(struct util_pair*) * UTIL_M);
+	memset(*d, 0, sizeof(struct util_pair*) * UTIL_TABLESIZE);
 	return 0;
 }
 
@@ -58,7 +58,7 @@ int util_insert(util_dictionary d, const char* key, int val){
 			d[j] = malloc( sizeof(struct util_pair) );
             d[j]->textKey = strdup(key);
 			d[j]->numericKey = k;
-			d[j]->val = val;
+			d[j]->item = val;
 
 			return 0;
 		}
@@ -71,27 +71,12 @@ int util_insert(util_dictionary d, const char* key, int val){
 			continue;
 		}
 
-	} while( i < UTIL_M);
+	} while( i < UTIL_TABLESIZE);
 	
 	setError("Hash table full");
 	return -1;
 }
 
-int util_directIndex(util_dictionary d, int index, char** key, int* val){
-
-    if(index < 0 || index > UTIL_M){
-        setError("index out of range");
-        return -1;
-    }
-
-    if(d[index] != NULL){
-        *key = d[index]->textKey;
-        *val = d[index]->val;
-    }
-
-    return 0;
-}
-   
 int util_search(util_dictionary d, const char* key, int* val){
 	int i = 0;
 	int j = 0;
@@ -100,12 +85,12 @@ int util_search(util_dictionary d, const char* key, int* val){
 	do { 
 		j = HASH(k, i);
 		if(d[j] != NULL && d[j]->numericKey == k){
-			*val = d[j]->val;
+			*val = d[j]->item;
 			return 1;
 		}
 		else i++;
 
-	} while(d[j] != NULL && i < UTIL_M);
+	} while(d[j] != NULL && i < UTIL_TABLESIZE);
 
 	return 0;
 }
@@ -128,21 +113,21 @@ int util_delete(util_dictionary d, const char* key){
 		}
 		else i++;
 
-	} while(p != NULL && i < UTIL_M);
+	} while(p != NULL && i < UTIL_TABLESIZE);
 
 	setError("no Linked List inserted at %s", key);
 	return -1;
 }
 
 int util_createLinkedDictionary(util_linkedDictionary* d){
-	*d = malloc(sizeof(struct util_linkedPair*) * UTIL_M);
+	*d = malloc(sizeof(struct util_linkedPair*) * UTIL_TABLESIZE);
 
 	if(*d == NULL){
 		setError("malloc: %s", strerror(errno) );
 		return -1;
 	}
 
-	memset(*d, 0, sizeof(struct util_linkedpair*) * UTIL_M);
+	memset(*d, 0, sizeof(struct util_linkedpair*) * UTIL_TABLESIZE);
 	return 0;
 }
 
@@ -163,22 +148,22 @@ int util_linkedInsert(util_linkedDictionary d, const char* key, int val){
 			}
 			d[j]->numericKey = k;
 			d[j]->textKey = strdup(key);
-			d[j]->vals.val = val;
-			d[j]->vals.next = NULL;
+			d[j]->list.item = val;
+			d[j]->list.next = NULL;
 
 			return 0;
 		}
 		else if( d[j]->numericKey == k ) {
 			util_linkedList* vals;
 
-			for(vals = &d[j]->vals; vals->next != NULL; vals = vals->next);
+			for(vals = &d[j]->list; vals->next != NULL; vals = vals->next);
 			vals = vals->next = malloc( sizeof(util_linkedList) );
 
 			if(vals == NULL){
 				setError("malloc: %s", strerror(errno) );
 				return -1;
 			}
-			vals->val = val;
+			vals->item = val;
 			vals->next = NULL;
 
 			return 0;
@@ -187,7 +172,7 @@ int util_linkedInsert(util_linkedDictionary d, const char* key, int val){
 			i++;
 		}
 
-	} while( i < UTIL_M);
+	} while( i < UTIL_TABLESIZE);
 	
 	setError("Hash table full");
 	return -1;
@@ -203,29 +188,14 @@ int util_linkedSearch(util_linkedDictionary d, const char* key, util_linkedList*
 	do { 
 		j = HASH(k, i);
 		if(d[j] != NULL && d[j] != &DELETED && d[j]->numericKey == k){
-			*vals = &d[j]->vals;
+			*vals = &d[j]->list;
 			return 1;
 		}
 		else i++;
 
-	} while(d[j] != NULL && i < UTIL_M);
+	} while(d[j] != NULL && i < UTIL_TABLESIZE);
 
 	return 0;
-}
-
-int util_linkedDirectIndex(util_linkedDictionary d, int index, char** key, util_linkedList** vals){
-
-    if(index < 0 || index > UTIL_M){
-        setError("index out of range");
-        return -1;
-    }
-
-    if(d[index] != NULL ){
-        if(key != NULL)  *key = d[index]->textKey;
-        if(vals != NULL) *vals = &d[index]->vals;
-    }
-
-    return 0;
 }
 
 int util_linkedDelete(util_linkedDictionary d, const char* key){
@@ -236,7 +206,7 @@ int util_linkedDelete(util_linkedDictionary d, const char* key){
 	do { 
 		j = HASH(k, i);
 		if(d[j] != NULL && d[j]->numericKey == k){
-			util_linkedList* vals = d[j]->vals.next;
+			util_linkedList* vals = d[j]->list.next;
 			util_linkedList* next;
 
 			while(vals != NULL) {
@@ -252,7 +222,7 @@ int util_linkedDelete(util_linkedDictionary d, const char* key){
 		}
 		else i++;
 
-	} while(d[j] != NULL && i < UTIL_M);
+	} while(d[j] != NULL && i < UTIL_TABLESIZE);
 
 	setError("no Linked List inserted at %s", key);
 	return -1;
