@@ -9,7 +9,7 @@
 #include "interpreter.h"
 
 #define STRING_SIZE 80
-#define TOKEN_SIZE 6
+#define TOKEN_SIZE 17
 #define BRANCHES_MAX ( (INTERP_MEMORY_LEN - INTERP_PROGRAM_START) / 2 )
 #define ADDR_FLAGS_LEN (INTERP_MEMORY_LEN / 4)
 
@@ -338,12 +338,6 @@ int assm_disassemble(void)
 	return 0;
 } 
 
-typedef char* token_t;
-typedef token_t* statement_t;
-
-#define TOKEN_INIT (memset(calloc(sizeof(char), TOKEN_SIZE), '\0', sizeof(char)))
-#define STATEMENT_INIT(N) (memset(calloc(sizeof(char*), N), 0, sizeof(char*) * N))
-
 #define WHITESPACE " \t\n"
 #define ISWHITESPACE(C) ((C) == ' ' || (C) == '\t' || (C) == '\n')
 
@@ -353,11 +347,13 @@ typedef token_t* statement_t;
 #define ENCODE_OPERAND_2(N) ( (N + 6) << 4 )
 #define ENCODE_OPERAND_3(N) ( (N + 6) << 8 )
 
+#define STATEMENT_LEN 8
+
 /* tokenize a line of assembly text.
  * return value is 1 if the line is a valid statement,
  * 0 if it's empty or a comment, and -1 if errors occur. */
-static inline int createStatement(statement_t s, char* line){
-	token_t token; 
+static inline int createStatement(char s[STATEMENT_LEN][TOKEN_SIZE], char* line){
+	char* token; 
 
 	token = strtok(line, WHITESPACE);
 
@@ -371,11 +367,14 @@ static inline int createStatement(statement_t s, char* line){
 
 	for(int i = 0; token != NULL && *token != ';'; token = strtok(NULL, WHITESPACE), *s[++i] = '\0'  ){
 		strcpy(s[i], token);
+
+        for(int j = 0; s[i][j] != '\0' && j < TOKEN_SIZE; j++)
+            s[i][j] = toupper(s[i][j]);
 	}
     return 1;
 }
 
-static inline int isLabelSym(token_t tok){
+static inline int isLabelSym(char* tok){
 	if(strlen(tok) <= 8 && tok[0] == 'L' && strcmp(tok, "LD") != 0){
 		for(int i=1; i <= 8 && tok[i] != '\0'; i++)
 			if( !isalnum( tok[i] ) )
@@ -385,7 +384,7 @@ static inline int isLabelSym(token_t tok){
 	else return 0;
 }
 
-static inline int isAddressLiteral(token_t tok){
+static inline int isAddressLiteral(char* tok){
 	if(strlen(tok) == 4 && tok[0] == '#'){
 		for(int i=1; i < 4; i++)
 			if(!isxdigit(tok[i]))
@@ -395,7 +394,7 @@ static inline int isAddressLiteral(token_t tok){
 	else return 0;
 }
 
-static inline int isByteSym(token_t tok){
+static inline int isByteSym(char* tok){
 	if(strlen(tok) == 3 && tok[0] == '#'){
 		for(int i=1; i < 3; i++)
 			if(!isxdigit(tok[i]))
@@ -405,14 +404,14 @@ static inline int isByteSym(token_t tok){
 	else return 0;
 }
 
-static inline int isNibbleSym(token_t tok){
+static inline int isNibbleSym(char* tok){
 	if(strlen(tok) == 2 && tok[0] == '#' && isxdigit(tok[1]))
 		return 1;
 	
 	else return 0;
 }
 
-static inline int isxySym(token_t tok){
+static inline int isxySym(char* tok){
 	if(strlen(tok) == 2 && tok[0] == 'V' && isxdigit(tok[1]))
 		return 1;
 	
@@ -456,11 +455,8 @@ int assm_assemble(const char* fileName)
 		return -1;
 	}
 
-	/* A statement type, _statement_t_, is used for parsing text.
-	 * These statement types are arrays of token types _token_t_.
-	 */
-	statement_t statement = STATEMENT_INIT(8);
-	for(int i = 0; i < 8; statement[i++] = TOKEN_INIT);
+    char statement[8][TOKEN_SIZE];
+    memset(statement, '\0', STATEMENT_LEN * TOKEN_SIZE);
 
 	while(getline(&line, &lineSize, assemblyFile) > 0 ){
 
@@ -528,10 +524,10 @@ int assm_assemble(const char* fileName)
 		}
 
 
-		if(strcmp(statement[statementIndex], "db") == 0)
+		if(strcmp(statement[statementIndex], "DB") == 0)
 		{	//is data directive 
-			while(!errors && isByteSym(statement[++statementIndex])){
-				if( interp_writeMemory(addr++, 
+			while(isByteSym(statement[++statementIndex])){
+                if(!errors && interp_writeMemory(addr++, 
 							(uint8_t)strtol(&statement[statementIndex][1], 
 								(char**)NULL, 
 								16 ) ) < 0 )
@@ -828,7 +824,7 @@ int assm_assemble(const char* fileName)
             if(isLabelSym(statement[i]) 
             && util_linkedSearch(incompleteInstructions, &statement[i][1], &list) 
               ){
-                setError("%d: %s has not been defined\n\t%s", lineNumber, statement[i], lineCpy);
+                setError("%d: label \"%s\" does not exist\n\t%s", lineNumber, statement[i], lineCpy);
                 logError();
             }
         }
