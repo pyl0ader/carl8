@@ -43,7 +43,7 @@ int main(int argc, char** argv)
 			presentErrorLog();
 			die();
 		}
-		
+    
 	}
 	else if (argc == 3 && strcmp(argv[1], "-a") == 0 ){
 		if( assm_assemble(argv[2]) < 0 ){
