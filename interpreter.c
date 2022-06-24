@@ -360,8 +360,15 @@ int interp_step(long delta)
 			pc_register += 2;
 		break;
 		case INTERP_ADD_VX_BYTE:
-			v_register[instruction.x] += instruction.kk;
-			pc_register += 2;
+        {
+            int result = v_register[instruction.x] + instruction.kk;
+            if(result > 255){
+                v_register[0xf] = 1;
+            }
+
+            v_register[instruction.x] = result & 0xff;
+            pc_register += 2;
+        }
 		break;
 		case INTERP_LD_VX_VY:
 			v_register[instruction.x] = v_register[instruction.y];
@@ -380,12 +387,19 @@ int interp_step(long delta)
 			pc_register += 2;
 		break;
 		case INTERP_ADD_VX_VY:
-			v_register[instruction.x] += v_register[instruction.y];
-			pc_register += 2;
+        {
+            int result = v_register[instruction.x] + v_register[instruction.y];
+            if(result > 255){
+                v_register[0xf] = 1;
+            }
+
+            v_register[instruction.x] = result & 0xff;
+            pc_register += 2;
+        }
 		break;
 		case INTERP_SUB_VX_VY:
-			v_register[instruction.x] -= v_register[instruction.y];
 			v_register[0xf] = v_register[instruction.x] > v_register[instruction.y];
+			v_register[instruction.x] -= v_register[instruction.y];
 			pc_register += 2;
 		break;
 		case INTERP_SHR_VX_VY:
@@ -394,8 +408,8 @@ int interp_step(long delta)
 			pc_register += 2;
 		break;
 		case INTERP_SUBN_VX_VY:
-			v_register[instruction.x] >>= 1;
 			v_register[0xf] = v_register[instruction.x] < v_register[instruction.y];
+			v_register[instruction.x] >>= 1;
 			pc_register += 2;
 		break;
 		case INTERP_SHL_VX_VY:
@@ -417,7 +431,8 @@ int interp_step(long delta)
 			pc_register += v_register[0] + instruction.nnn;
 		break;
 		case INTERP_RND_VX_BYTE:
-incomplete = 1;
+            v_register[instruction.x] = rand() & instruction.kk; 
+            pc_register += 2;
 		break;
 		case INTERP_DRW_VX_VY_NIBBLE:
 			v_register[0xf] = 0;
@@ -425,10 +440,7 @@ incomplete = 1;
 			for(int x = v_register[instruction.x]; x < v_register[instruction.x] + 8; x++){
 				for(int y = v_register[instruction.y]; y < v_register[instruction.y] + instruction.n; y++){
 					int screenIndex = 64 * (y % 32) + (x % 64);
-					/*
-					Everyone knows that debugging is twice as hard as writing a program in the first place. 
-					So if you're as clever as you can be when you write it, how will you ever debug it?
-						- Brian Kernigahn */
+
 					int spriteBit = interp_memory[i_register + (y - v_register[instruction.y])] & (1 << (7 - (x - v_register[instruction.x]) ) );
 
 					if(!v_register[0xf])
@@ -482,17 +494,22 @@ incomplete = 1;
 			pc_register += 2;
 		break;
 		case INTERP_LD_B_VX:
-incomplete = 1;
+            for(int i = 2; i >= 0; i--){
+                interp_memory[i_register + (2 - i)] = (v_register[instruction.x] / (int)pow(10, i) ) % 10; 
+            }
+			pc_register += 2;
 		break;
 		case INTERP_LD_MEMINDEX_VX:
+            // *DROPS A FAT LODE*
 			for(int i = 0; i <= v_register[instruction.x]; i++){
 				interp_writeMemory(i_register, v_register[instruction.x]);
 			} 
 			pc_register += 2;
+            // AH MAN JIMMY IM SORRY
 		break;
 		case INTERP_LD_VX_MEMINDEX:
-			for(int i = 0; i < (v_register[instruction.x] & 0xf); i++){
-				v_register[instruction.x + i] = interp_readMemory(i_register + i);
+			for(int i = 0; i <= instruction.x; i++){
+				v_register[i] = interp_readMemory(i_register + i);
 			}
 			pc_register += 2;
 		break;
