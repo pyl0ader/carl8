@@ -1,5 +1,4 @@
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
 
 #include "video.h"
 #include "logError.h"
@@ -10,11 +9,8 @@ static int update(void);
 const unsigned short WIDTH = 640;
 const unsigned short HEIGHT = 480;
 
-const unsigned short TOOLBAR_HEIGHT = 23;
-
 static SDL_Window *window;
 static SDL_Texture *interpreterScreen;
-static SDL_Texture *toolbar;
 static SDL_Renderer *renderer;
 
 /* function definitions */
@@ -24,8 +20,6 @@ static SDL_Renderer *renderer;
  * Return value is -1 if errors occur, otherwise it is 0. */
 int initializeVideo(const char* name)
 {
-    TTF_Font *font;
-    SDL_Surface *toolbar_surface;
     SDL_Color white;
     SDL_Color black;
 
@@ -45,25 +39,12 @@ int initializeVideo(const char* name)
 		return -1;
 	}
 
-	// SDL TTF is initialized
-	if(TTF_Init() == -1) {
-		setError("TTF_Init: %s", TTF_GetError() );
-		return -1;
-	}
-
-    // FreeFont Mono is opened
-    font = TTF_OpenFont("sfd/FreeMono.ttf", 16);
-    if(!font) {
-        setError("TTF_OpenFont: %s", TTF_GetError() );
-        return -1;
-    }
-
 	// _window_ and _renderer_ are created
 	window = SDL_CreateWindow(name, 
 							SDL_WINDOWPOS_UNDEFINED, 
 							SDL_WINDOWPOS_UNDEFINED, 
 							WIDTH, 
-							HEIGHT + TOOLBAR_HEIGHT, 
+							HEIGHT, 
 							0);
 	if(window == NULL){
 		setError("SDL_CreateWindow: %s", SDL_GetError());
@@ -77,20 +58,6 @@ int initializeVideo(const char* name)
 		setError("SDL_CreateRenderer: %s", SDL_GetError());
 		return -1;
 	}
-
-    // toolbar is rendered
-    toolbar_surface = TTF_RenderUTF8_Shaded(font, " File Interpreter View ", black, white);
-    toolbar = SDL_CreateTextureFromSurface(renderer, toolbar_surface);
-
-    if(toolbar_surface == NULL) {
-        setError("TTF_RenderUTF8_Shaded: %s", TTF_GetError() );
-        return -1;
-    }
-    
-    if(toolbar == NULL) {
-        setError("SDL_CreateTextureFromSurface: %s", SDL_GetError() );
-        return -1;
-    }
 
 	// _interpreterScreen_ is created
 	interpreterScreen = SDL_CreateTexture(renderer, 
@@ -221,22 +188,7 @@ int clear(void)
  * then the toolbar is drawn above it. */
 int update(void)
 {
-	SDL_Rect screenArea;
-	SDL_Rect toolbarArea;
-
-	screenArea.x = 0;
-	screenArea.y = TOOLBAR_HEIGHT;
-	screenArea.w = WIDTH;
-	screenArea.h = HEIGHT;
-
-    toolbarArea.x = 0;
-    toolbarArea.y = 0;
-
-    SDL_QueryTexture(toolbar,
-            NULL,
-            NULL,
-            &toolbarArea.w,
-            &toolbarArea.h);
+	const SDL_Rect screenArea = {0, 0, WIDTH, HEIGHT};
 
 	if( SDL_SetRenderTarget(renderer, NULL) < 0 ) {
         setError("SDL_SetRenderTarget: %s", SDL_GetError() );
@@ -245,13 +197,6 @@ int update(void)
 	if( SDL_RenderCopy(renderer, interpreterScreen,
 				       NULL,
 				       &screenArea ) < 0 ) 
-    {
-        setError("SDL_RenderCopy: %s", SDL_GetError() );
-        return -1;
-    }
-	if( SDL_RenderCopy(renderer, toolbar,
-				       NULL,
-				       &toolbarArea ) < 0 ) 
     {
         setError("SDL_RenderCopy: %s", SDL_GetError() );
         return -1;

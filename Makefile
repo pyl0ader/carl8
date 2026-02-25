@@ -1,4 +1,4 @@
-INC=   -lm -lSDL2 -lSDL2_ttf
+INC=   -lm -lSDL2
 FLAGS= -g ${INC}
 
 HDR=input.h beep.h video.h logError.h interpreter.h util.h assembly.h 
