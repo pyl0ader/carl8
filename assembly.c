@@ -421,7 +421,7 @@ static inline int isxySym(char* tok){
 int assm_assemble(const char* fileName)
 {
 	size_t lineSize = STRING_SIZE;
-	char* line;
+	char* line = NULL;
     char lineCpy[lineSize];
 
 	int lineNumber = 0;
