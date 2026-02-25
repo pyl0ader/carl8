@@ -89,8 +89,6 @@ int main(int argc, char** argv)
 			die();
 		}
 
-		initializeInput();
-
 		struct timespec lastTime  = {0, 0};
 		struct timespec deltaTime = {0, 0};
 

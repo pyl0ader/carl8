@@ -1,6 +1,5 @@
 #include <stdint.h>
 
-extern void initializeInput(void);
 extern void inputProcess();
 
 extern struct Action {
