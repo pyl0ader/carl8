@@ -70,6 +70,8 @@ int main(int argc, char** argv)
 			setError("could not load %s: %s",
 					argv[1],
 					getError() );
+			        presentErrorLog();
+                    die();
 		}
 		
 	}

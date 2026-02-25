@@ -140,14 +140,18 @@ int interp_loadRom(const char* rom)
 			INTERP_MEMORY_LEN - INTERP_PROGRAM_START, 
 			load);
 
-	if( ferror(load) || !feof(load) ){
+    if( !feof(load) ){
+        setError("rom file is too large. not a valid program");
+        return -1;
+    }
+	if( ferror(load) ){
 		setError("fread: %s", strerror(errno));
 		return -1;
 	}
 
 	while(!interp_memory[INTERP_PROGRAM_START + programSize - 1]){
 		if(--programSize <= 0){
-			setError("rom file is blank; not a valid program");
+			setError("rom file is blank. not a valid program");
 			return -1;
 		}
 	}
