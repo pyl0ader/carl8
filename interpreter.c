@@ -290,9 +290,6 @@ int interp_step(long delta)
 	struct timespec rem = {0, 0};
 	static long elapsed = 0;
 
-    // for incomplete instructions
-	uint8_t incomplete  = 0;
-
 	// sleep to control speed of execution
 	req.tv_nsec = SECOND / SPEED;
 	nanosleep(&req, &rem); 
@@ -521,10 +518,6 @@ int interp_step(long delta)
 			setError("Possibly corrupt program");
 			return -1;
 		break;
-	}
-	if(incomplete){
-		pc_register += 2;
-		incomplete = 0;
 	}
 }
 
