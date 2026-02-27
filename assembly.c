@@ -806,6 +806,8 @@ int assm_assemble(const char* fileName)
 			    addr += 2;
 			}
 		}
+        free(line);
+        line = NULL;
 	}
 
     lineNumber = 0;
@@ -828,6 +830,8 @@ int assm_assemble(const char* fileName)
                 logError();
             }
         }
+        free(line);
+        line = NULL;
     }
         
 	if(errors){
