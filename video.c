@@ -3,15 +3,17 @@
 #include "video.h"
 #include "logError.h"
 
+#define VIDEO_DEFAULT_WINDOW_WIDTH 640
+#define VIDEO_DEFAULT_WINDOW_HEIGHT 480
+
 static int update(void);
 
 /* variables */
-const unsigned short WIDTH = 640;
-const unsigned short HEIGHT = 480;
-
 static SDL_Window *window;
 static SDL_Texture *interpreterScreen;
 static SDL_Renderer *renderer;
+
+static SDL_Rect screenArea = {0, 0, VIDEO_DEFAULT_WINDOW_WIDTH, VIDEO_DEFAULT_WINDOW_HEIGHT};
 
 /* function definitions */
 
@@ -43,9 +45,9 @@ int initializeVideo(const char* name)
 	window = SDL_CreateWindow(name, 
 							SDL_WINDOWPOS_UNDEFINED, 
 							SDL_WINDOWPOS_UNDEFINED, 
-							WIDTH, 
-							HEIGHT, 
-							0);
+							VIDEO_DEFAULT_WINDOW_WIDTH, 
+							VIDEO_DEFAULT_WINDOW_HEIGHT, 
+							0 | SDL_WINDOW_RESIZABLE);
 	if(window == NULL){
 		setError("SDL_CreateWindow: %s", SDL_GetError());
 		return -1;
@@ -86,6 +88,11 @@ int initializeVideo(const char* name)
 	return 0;
 }
 
+void video_set_window_size(uint16_t width, uint16_t height){
+    screenArea.w = width;
+    screenArea.h = height;
+}
+
 /* _renderer_ and _window_ are destroyed. SDL is closed.
  * Errors are ignored. */
 void closeVideo(void)
@@ -104,8 +111,8 @@ extern int draw(const uint8_t back[64 * 32])
 {
 	int x, y, i;
 
-	static unsigned char front[64 * 32] = {0};
-	unsigned char changed = 0;
+	static uint8_t front[64 * 32] = {0};
+	uint8_t changed = 0;
 
 	if( SDL_SetRenderTarget(renderer, interpreterScreen) < 0){
 		setError("SDL_SetRenderTarget: %s", SDL_GetError() );
@@ -116,7 +123,7 @@ extern int draw(const uint8_t back[64 * 32])
 	{
 		for(x = 0; x < 64; x++)
 		{
-			int coordinates = y * 64 + x;
+		    uint16_t coordinates = y * 64 + x;
 			if((back[coordinates] ^ front[coordinates]) || (cleared && back[coordinates]) )
 			{
 				if(!changed)
@@ -188,8 +195,6 @@ int clear(void)
  * then the toolbar is drawn above it. */
 int update(void)
 {
-	const SDL_Rect screenArea = {0, 0, WIDTH, HEIGHT};
-
 	if( SDL_SetRenderTarget(renderer, NULL) < 0 ) {
         setError("SDL_SetRenderTarget: %s", SDL_GetError() );
         return -1;

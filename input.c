@@ -1,6 +1,7 @@
 #include <stdint.h>
 
 #include "input.h"
+#include "video.h"
 
 /* variables */
 struct Action action = {0, 0};
@@ -8,11 +9,9 @@ struct Action action = {0, 0};
 #include <SDL2/SDL_events.h>
 #include <string.h>
 
-static SDL_Event e;
-
 /* function definitions */
 
-static uint8_t input_get_key(SDL_KeyboardEvent keyboard_event)
+static inline uint8_t input_get_key(SDL_KeyboardEvent keyboard_event)
 {
     switch(keyboard_event.keysym.sym){
         case SDLK_1:
@@ -76,6 +75,7 @@ static uint8_t input_get_key(SDL_KeyboardEvent keyboard_event)
  * updated upon press and release events. */
 void inputProcess()
 {
+    SDL_Event e = {0};
 	uint8_t k;
 
 	while(SDL_PollEvent(&e)){
@@ -83,9 +83,12 @@ void inputProcess()
 			action.quit = 1;
             return;
 		}
-
-        if(e.type != SDL_KEYDOWN && e.type != SDL_KEYUP)
-            return;
+        else if(e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED){
+            video_set_window_size(e.window.data1, e.window.data2);
+            continue;
+        }
+        else if(e.type != SDL_KEYDOWN && e.type != SDL_KEYUP)
+            continue;
 
         k = input_get_key(e.key);
         if(k != 0)
